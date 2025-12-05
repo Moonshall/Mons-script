@@ -61,7 +61,7 @@ local autoForge = false
 local selectedOre = "All"
 local selectedNPC = "All"
 local selectedSellItem = "All Items"
-local flySpeed = 50
+local flySpeed = 35 -- Reduced speed to avoid anti-cheat (was 50)
 local miningRange = 20
 local farmConnection = nil
 local killConnection = nil
@@ -75,6 +75,11 @@ local zombiesKilled = 0
 local itemsSold = 0
 local itemsForged = 0
 local currentTarget = nil
+
+-- Anti-Cheat Bypass Settings
+local useAntiCheat = true
+local humanizedSpeed = true
+local randomDelays = true
 
 -- Ore Names List
 local oreNames = {"All","Stone", "Emberstone", "Frost Ore", "Ironcore", "Shadow Shard", "Glimmer Crystal", 
@@ -398,31 +403,82 @@ local function findNearestZombie()
     return nearestZombie
 end
 
+-- Anti-Cheat Bypass: Random delay generator
+local function getRandomDelay(min, max)
+    if not randomDelays then return min end
+    return math.random(min * 100, max * 100) / 100
+end
+
+-- Anti-Cheat Bypass: Add random offset to position
+local function humanizePosition(pos)
+    if not humanizedSpeed then return pos end
+    local offset = Vector3.new(
+        math.random(-2, 2),
+        math.random(-1, 1),
+        math.random(-2, 2)
+    )
+    return pos + offset
+end
+
+-- Anti-Cheat Bypass: Variable speed
+local function getHumanizedSpeed()
+    if not humanizedSpeed then return flySpeed end
+    return flySpeed + math.random(-5, 5)
+end
+
 local function tweenTo(targetPos, speed)
     local hrp = getHumanoidRootPart()
     if not hrp then return end
     
+    -- Add random offset to look more human
+    if useAntiCheat then
+        targetPos = humanizePosition(targetPos)
+        speed = getHumanizedSpeed()
+    end
+    
     local distance = (hrp.Position - targetPos).Magnitude
+    
+    -- Don't tween if too close (looks suspicious)
+    if distance < 10 then
+        hrp.CFrame = CFrame.new(targetPos)
+        return
+    end
+    
     local duration = distance / speed
+    
+    -- Add slight delay before starting tween
+    if useAntiCheat then
+        wait(getRandomDelay(0.1, 0.3))
+    end
     
     enableNoclip()
     
     local TweenService = game:GetService("TweenService")
+    -- Use Sine easing for more natural movement
+    local easingStyle = useAntiCheat and Enum.EasingStyle.Sine or Enum.EasingStyle.Linear
+    
     local tween = TweenService:Create(
         hrp,
-        TweenInfo.new(duration, Enum.EasingStyle.Linear),
+        TweenInfo.new(duration, easingStyle),
         {CFrame = CFrame.new(targetPos)}
     )
     
     tween:Play()
     tween.Completed:Connect(function()
         disableNoclip()
+        -- Add small delay after arriving
+        if useAntiCheat then
+            wait(getRandomDelay(0.1, 0.2))
+        end
     end)
     
     return tween
 end
 
 -- Auto Functions
+local lastMineTime = 0
+local miningCooldown = 0.5
+
 local function startAutoMining()
     if farmConnection then
         farmConnection:Disconnect()
@@ -435,11 +491,22 @@ local function startAutoMining()
     farmConnection = RunService.Heartbeat:Connect(function()
         if not autoMining then return end
         
+        -- Anti-cheat: Rate limiting
+        local currentTime = tick()
+        if currentTime - lastMineTime < miningCooldown then
+            return
+        end
+        
         local ore = findNearestOre()
         if ore then
             local hrp = getHumanoidRootPart()
             if hrp then
                 local distance = (hrp.Position - ore.Position).Magnitude
+                
+                -- Anti-cheat: Don't mine if too far (suspicious)
+                if distance > 300 then
+                    return
+                end
                 
                 if distance > miningRange then
                     tweenTo(ore.Position + Vector3.new(0, 5, 0), flySpeed)
@@ -447,6 +514,12 @@ local function startAutoMining()
                     local char = getCharacter()
                     if char and not char:FindFirstChildOfClass("Tool") then
                         equipPickaxe()
+                        wait(getRandomDelay(0.3, 0.5))
+                    end
+                    
+                    -- Add random delay before mining
+                    if useAntiCheat then
+                        wait(getRandomDelay(0.2, 0.4))
                     end
                     
                     pcall(function()
@@ -455,14 +528,23 @@ local function startAutoMining()
                     
                     if ore and ore.Parent then
                         statsCollected = statsCollected + 1
+                        lastMineTime = currentTime
+                    end
+                    
+                    -- Add delay after mining
+                    if useAntiCheat then
+                        wait(getRandomDelay(0.3, 0.6))
                     end
                 end
             end
         end
         
-        wait(0.5)
+        wait(useAntiCheat and getRandomDelay(0.5, 1.0) or 0.5)
     end)
 end
+
+local lastAttackTime = 0
+local attackCooldown = 0.3
 
 local function startAutoKill()
     if killConnection then
@@ -477,11 +559,21 @@ local function startAutoKill()
     killConnection = RunService.Heartbeat:Connect(function()
         if not autoKillZombie then return end
         
+        -- Anti-cheat: Rate limiting
+        local currentTime = tick()
+        if currentTime - lastAttackTime < attackCooldown then
+            return
+        end
+        
         if currentTarget then
             local targetHumanoid = currentTarget:FindFirstChild("Humanoid")
             if not targetHumanoid or targetHumanoid.Health <= 0 or not currentTarget.Parent then
                 if targetHumanoid and targetHumanoid.Health <= 0 then
                     zombiesKilled = zombiesKilled + 1
+                    -- Add delay after kill
+                    if useAntiCheat then
+                        wait(getRandomDelay(0.5, 1.0))
+                    end
                 end
                 currentTarget = nil
             end
@@ -489,6 +581,10 @@ local function startAutoKill()
         
         if not currentTarget then
             currentTarget = findNearestZombie()
+            -- Add delay before attacking new target
+            if currentTarget and useAntiCheat then
+                wait(getRandomDelay(0.3, 0.5))
+            end
         end
         
         if currentTarget then
@@ -499,22 +595,37 @@ local function startAutoKill()
             if hrp and zombieHrp and zombieHumanoid and zombieHumanoid.Health > 0 then
                 local distance = (hrp.Position - zombieHrp.Position).Magnitude
                 
+                -- Anti-cheat: Don't attack if too far
+                if distance > 200 then
+                    currentTarget = nil
+                    return
+                end
+                
                 if distance > 8 then
                     tweenTo(zombieHrp.Position + Vector3.new(0, 2, 0), flySpeed)
                 else
-                    hrp.CFrame = CFrame.new(hrp.Position, zombieHrp.Position)
+                    -- More natural facing
+                    if useAntiCheat then
+                        local lookAt = CFrame.new(hrp.Position, zombieHrp.Position)
+                        hrp.CFrame = hrp.CFrame:Lerp(lookAt, 0.5)
+                    else
+                        hrp.CFrame = CFrame.new(hrp.Position, zombieHrp.Position)
+                    end
                     
                     local char = getCharacter()
                     if char and not char:FindFirstChildOfClass("Tool") then
                         equipWeapon()
+                        wait(getRandomDelay(0.2, 0.4))
                     end
+                    
+                    lastAttackTime = currentTime
                 end
             else
                 currentTarget = nil
             end
         end
         
-        wait(0.2)
+        wait(useAntiCheat and getRandomDelay(0.2, 0.4) or 0.2)
     end)
 end
 
@@ -581,6 +692,27 @@ end)
 
 FarmSection:NewSlider("Mining Range", "Distance to mine", 50, 5, function(value)
 	miningRange = value
+end)
+
+FarmSection:NewSlider("Fly Speed", "Movement speed", 60, 20, function(value)
+	flySpeed = value
+end)
+
+-- Anti-Cheat Protection Section
+local AntiCheatSection = FarmTab:NewSection("Anti-Cheat Protection")
+
+AntiCheatSection:NewLabel("Enable these to avoid detection")
+
+AntiCheatSection:NewToggle("Anti-Cheat Bypass", "Humanized movements", function(state)
+	useAntiCheat = state
+end)
+
+AntiCheatSection:NewToggle("Random Delays", "Random timing", function(state)
+	randomDelays = state
+end)
+
+AntiCheatSection:NewToggle("Humanized Speed", "Variable speed", function(state)
+	humanizedSpeed = state
 end)
 
 -- Combat Tab
