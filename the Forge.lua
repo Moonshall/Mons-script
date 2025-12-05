@@ -318,52 +318,121 @@ local function tweenTo(targetPos, speed)
 end
 
 local function activateTool()
+    local char = getCharacter()
+    if not char then return end
+    
+    local tool = char:FindFirstChildOfClass("Tool")
+    
+    -- Method 1: Tool service remote
     pcall(function()
-        -- Method 1: Direct tool activation
         Services.Tool.RF.ToolActivated:InvokeServer()
     end)
     
+    -- Method 2: Direct tool activation
+    if tool then
+        pcall(function()
+            tool:Activate()
+        end)
+    end
+    
+    -- Method 3: VirtualInputManager for mobile/PC
     pcall(function()
-        -- Method 2: Character tool activation
-        local char = getCharacter()
-        if char then
-            local tool = char:FindFirstChildOfClass("Tool")
-            if tool then
-                tool:Activate()
-            end
-        end
+        local VIM = game:GetService("VirtualInputManager")
+        VIM:SendMouseButtonEvent(0, 0, 0, true, game, 0)
+        task.wait(0.01)
+        VIM:SendMouseButtonEvent(0, 0, 0, false, game, 0)
     end)
     
+    -- Method 4: UserInputService simulation
     pcall(function()
-        -- Method 3: Mouse click simulation
-        local player = game:GetService("Players").LocalPlayer
-        if player then
-            local mouse = player:GetMouse()
-            if mouse then
-                mouse1click()
-            end
+        local UIS = game:GetService("UserInputService")
+        local mouse = LocalPlayer:GetMouse()
+        if mouse and tool then
+            mouse1press()
+            task.wait(0.01)
+            mouse1release()
         end
     end)
 end
 
 local function equipPickaxe()
-    pcall(function()
-        -- Try multiple pickaxe names
-        local pickaxeNames = {"Pickaxe", "Ember Pickaxe", "Titan Pick", "Crystal Carver", "Obsidian Drill"}
-        for _, name in pairs(pickaxeNames) do
-            Services.Character.RF.EquipItem:InvokeServer(name)
+    local char = getCharacter()
+    if not char then return false end
+    
+    -- Check if already equipped
+    local currentTool = char:FindFirstChildOfClass("Tool")
+    if currentTool and (currentTool.Name:lower():find("pick") or currentTool.Name:lower():find("drill")) then
+        return true
+    end
+    
+    -- Try to equip from backpack or inventory
+    local pickaxeNames = {"Pickaxe", "Ember Pickaxe", "Titan Pick", "Crystal Carver", "Obsidian Drill", "Stone Pickaxe", "Iron Pickaxe"}
+    
+    -- Method 1: Check backpack
+    local backpack = LocalPlayer:FindFirstChild("Backpack")
+    if backpack then
+        for _, pickaxeName in pairs(pickaxeNames) do
+            local tool = backpack:FindFirstChild(pickaxeName)
+            if tool and tool:IsA("Tool") then
+                local humanoid = getHumanoid()
+                if humanoid then
+                    humanoid:EquipTool(tool)
+                    return true
+                end
+            end
         end
-    end)
+    end
+    
+    -- Method 2: Use remote service
+    for _, name in pairs(pickaxeNames) do
+        pcall(function()
+            Services.Character.RF.EquipItem:InvokeServer(name)
+        end)
+    end
+    
+    task.wait(0.2)
+    return char:FindFirstChildOfClass("Tool") ~= nil
 end
 
 local function equipWeapon()
-    pcall(function()
-        -- Try multiple weapon names
-        local weaponNames = {"Sword", "Frostbite Blade", "Shadow Cleaver", "Void Hammer", "Stormbreaker Axe", "Molten Warhammer"}
-        for _, name in pairs(weaponNames) do
-            Services.Character.RF.EquipItem:InvokeServer(name)
+    local char = getCharacter()
+    if not char then return false end
+    
+    -- Check if already equipped
+    local currentTool = char:FindFirstChildOfClass("Tool")
+    if currentTool and (currentTool.Name:lower():find("sword") or currentTool.Name:lower():find("blade") or 
+                        currentTool.Name:lower():find("axe") or currentTool.Name:lower():find("hammer") or
+                        currentTool.Name:lower():find("cleaver")) then
+        return true
+    end
+    
+    -- Try to equip from backpack or inventory
+    local weaponNames = {"Sword", "Frostbite Blade", "Shadow Cleaver", "Void Hammer", "Stormbreaker Axe", "Molten Warhammer", "Iron Sword", "Steel Blade"}
+    
+    -- Method 1: Check backpack
+    local backpack = LocalPlayer:FindFirstChild("Backpack")
+    if backpack then
+        for _, weaponName in pairs(weaponNames) do
+            local tool = backpack:FindFirstChild(weaponName)
+            if tool and tool:IsA("Tool") then
+                local humanoid = getHumanoid()
+                if humanoid then
+                    humanoid:EquipTool(tool)
+                    return true
+                end
+            end
         end
-    end)
+    end
+    
+    -- Method 2: Use remote service
+    for _, name in pairs(weaponNames) do
+        pcall(function()
+            Services.Character.RF.EquipItem:InvokeServer(name)
+        end)
+    end
+    
+    task.wait(0.2)
+    return char:FindFirstChildOfClass("Tool") ~= nil
 end
 
 local function forge(target)
@@ -490,8 +559,18 @@ local function startAutoMining()
                 if distance > miningRange then
                     tweenTo(ore.Position + Vector3.new(0, 5, 0), flySpeed)
                 else
+                    -- Re-equip pickaxe if needed
+                    local char = getCharacter()
+                    if char and not char:FindFirstChildOfClass(\"Tool\") then
+                        equipPickaxe()
+                    end
+                    
                     forge(ore.Parent)
-                    statsCollected = statsCollected + 1
+                    
+                    -- Check if ore still exists before incrementing
+                    if ore and ore.Parent then
+                        statsCollected = statsCollected + 1
+                    end
                 end
             end
         end
@@ -501,10 +580,14 @@ local function startAutoMining()
 end
 
 -- Auto Kill Zombie Function
+local currentTarget = nil
+
 local function startAutoKill()
     if killConnection then
         killConnection:Disconnect()
     end
+    
+    currentTarget = nil
     
     -- Start tapping first
     startKillTap()
@@ -516,28 +599,51 @@ local function startAutoKill()
     killConnection = RunService.Heartbeat:Connect(function()
         if not autoKillZombie then return end
         
-        local zombie = findNearestZombie()
-        if zombie then
-            local hrp = getHumanoidRootPart()
-            local zombieHrp = zombie:FindFirstChild("HumanoidRootPart")
-            
-            if hrp and zombieHrp then
-                local distance = (hrp.Position - zombieHrp.Position).Magnitude
-                
-                if distance > 10 then
-                    tweenTo(zombieHrp.Position + Vector3.new(0, 3, 0), flySpeed)
-                else
-                    hrp.CFrame = CFrame.new(hrp.Position, zombieHrp.Position)
-                    
-                    local zombieHumanoid = zombie:FindFirstChild("Humanoid")
-                    if zombieHumanoid and zombieHumanoid.Health <= 0 then
-                        zombiesKilled = zombiesKilled + 1
-                    end
+        -- Check if current target is still valid and alive
+        if currentTarget then
+            local targetHumanoid = currentTarget:FindFirstChild("Humanoid")
+            if not targetHumanoid or targetHumanoid.Health <= 0 or not currentTarget.Parent then
+                -- Target is dead or invalid, increment kill counter
+                if targetHumanoid and targetHumanoid.Health <= 0 then
+                    zombiesKilled = zombiesKilled + 1
                 end
+                currentTarget = nil
             end
         end
         
-        wait(0.3)
+        -- Find new target only if no current target
+        if not currentTarget then
+            currentTarget = findNearestZombie()
+        end
+        
+        -- Attack current target
+        if currentTarget then
+            local hrp = getHumanoidRootPart()
+            local zombieHrp = currentTarget:FindFirstChild("HumanoidRootPart")
+            local zombieHumanoid = currentTarget:FindFirstChild("Humanoid")
+            
+            if hrp and zombieHrp and zombieHumanoid and zombieHumanoid.Health > 0 then
+                local distance = (hrp.Position - zombieHrp.Position).Magnitude
+                
+                if distance > 8 then
+                    tweenTo(zombieHrp.Position + Vector3.new(0, 2, 0), flySpeed)
+                else
+                    -- Face the target and stay close
+                    hrp.CFrame = CFrame.new(hrp.Position, zombieHrp.Position)
+                    
+                    -- Re-equip weapon if needed
+                    local char = getCharacter()
+                    if char and not char:FindFirstChildOfClass("Tool") then
+                        equipWeapon()
+                    end
+                end
+            else
+                -- Target became invalid during this frame
+                currentTarget = nil
+            end
+        end
+        
+        wait(0.2)
     end)
 end
 
@@ -970,7 +1076,7 @@ Tabs.InfoTab:Section({
 })
 
 Tabs.InfoTab:Paragraph{
-	Title = "NatHub Development",
+	Title = "Hi",
 	Desc = "Version: 2.0\nGame ID: 76558904092080\n\nAll-in-one script with Anti AFK, Auto Mining, and Auto Kill features."
 }
 
