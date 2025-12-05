@@ -20,16 +20,16 @@ local Services = {
 }
 
 -- Load UI Library
-local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/dy1zn4t/bmF0dWk-/refs/heads/main/ui.lua"))()
-local Window = WindUI:CreateWindow({
-	Title = "The Forge - Complete Hub",
+local NatHub = loadstring(game:HttpGet("https://raw.githubusercontent.com/dy1zn4t/bmF0dWk-/refs/heads/main/ui.lua"))()
+local Window = NatHub:CreateWindow({
+	Title = "NatHub",
 	Icon = "rbxassetid://113216930555884",
 	Author = "Script Hub",
-	Folder = "TheForge",
+	Folder = "NatHub",
 	Size = UDim2.fromOffset(580, 460),
 	LiveSearchDropdown = true,
     AutoSave = true,
-    FileSaveName = "TheForge_Config.json",
+    FileSaveName = "NatHub_Config.json",
 })
 
 -- Create Tabs
@@ -52,12 +52,20 @@ local actionCount = 0
 -- Auto Farm Variables
 local autoMining = false
 local autoKillZombie = false
+local autoSell = false
+local autoForge = false
 local flySpeed = 50
 local miningRange = 20
 local farmConnection = nil
 local killConnection = nil
+local sellConnection = nil
+local forgeConnection = nil
+local noclipConnection = nil
+local tapConnection = nil
 local statsCollected = 0
 local zombiesKilled = 0
+local itemsSold = 0
+local itemsForged = 0
 
 -- Anti AFK Function
 local function performAntiAFK()
@@ -95,6 +103,52 @@ end
 local function getHumanoid()
     local char = getCharacter()
     return char and char:FindFirstChild("Humanoid")
+end
+
+-- Noclip Function
+local function enableNoclip()
+    if noclipConnection then return end
+    noclipConnection = RunService.Stepped:Connect(function()
+        local char = getCharacter()
+        if char then
+            for _, part in pairs(char:GetDescendants()) do
+                if part:IsA("BasePart") then
+                    part.CanCollide = false
+                end
+            end
+        end
+    end)
+end
+
+local function disableNoclip()
+    if noclipConnection then
+        noclipConnection:Disconnect()
+        noclipConnection = nil
+    end
+    local char = getCharacter()
+    if char then
+        for _, part in pairs(char:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part.CanCollide = true
+            end
+        end
+    end
+end
+
+-- Auto Tap Function
+local function startAutoTap()
+    if tapConnection then return end
+    tapConnection = RunService.Heartbeat:Connect(function()
+        activateTool()
+        wait(0.1)
+    end)
+end
+
+local function stopAutoTap()
+    if tapConnection then
+        tapConnection:Disconnect()
+        tapConnection = nil
+    end
 end
 
 local function findNearestOre()
@@ -170,7 +224,21 @@ end
 
 local function equipPickaxe()
     pcall(function()
-        Services.Character.RF.EquipItem:InvokeServer("Pickaxe")
+        -- Try multiple pickaxe names
+        local pickaxeNames = {"Pickaxe", "Ember Pickaxe", "Titan Pick", "Crystal Carver", "Obsidian Drill"}
+        for _, name in pairs(pickaxeNames) do
+            Services.Character.RF.EquipItem:InvokeServer(name)
+        end
+    end)
+end
+
+local function equipWeapon()
+    pcall(function()
+        -- Try multiple weapon names
+        local weaponNames = {"Sword", "Frostbite Blade", "Shadow Cleaver", "Void Hammer", "Stormbreaker Axe", "Molten Warhammer"}
+        for _, name in pairs(weaponNames) do
+            Services.Character.RF.EquipItem:InvokeServer(name)
+        end
     end)
 end
 
@@ -180,11 +248,96 @@ local function forge(target)
     end)
 end
 
+local function openDialogue(npc)
+    pcall(function()
+        Services.Proximity.RF.Dialogue:InvokeServer(npc)
+    end)
+end
+
+local function runDialogueCommand(command)
+    pcall(function()
+        Services.Dialogue.RF.RunCommand:InvokeServer(command)
+    end)
+end
+
+local function getPlayerEquipment()
+    local success, result = pcall(function()
+        return Services.Status.RF.GetPlayerEquipmentInfo:InvokeServer()
+    end)
+    return success and result or nil
+end
+
+local function findNearestSellNPC()
+    local hrp = getHumanoidRootPart()
+    if not hrp then return nil end
+    
+    local nearestNPC = nil
+    local nearestDistance = math.huge
+    
+    -- NPC names from list
+    local npcNames = {"Brakk", "Lira", "Oskar", "Tolin", "Mira", "Kaen", "Sela", "Drax", "Fynn", "Valeen", 
+                      "Rudo", "Elwyn", "Jarrick", "Nora", "Taro", "Garm", "Vella", "Kard", "Myra", "Thorne"}
+    
+    for _, npc in pairs(workspace:GetDescendants()) do
+        if npc:IsA("Model") then
+            local found = npc.Name:lower():find("merchant") or npc.Name:lower():find("shop") or npc.Name:lower():find("sell")
+            if not found then
+                for _, name in pairs(npcNames) do
+                    if npc.Name:find(name) then
+                        found = true
+                        break
+                    end
+                end
+            end
+            
+            if found then
+                local npcHrp = npc:FindFirstChild("HumanoidRootPart") or npc:FindFirstChildWhichIsA("BasePart")
+                if npcHrp then
+                    local distance = (hrp.Position - npcHrp.Position).Magnitude
+                    if distance < nearestDistance and distance < 1000 then
+                        nearestDistance = distance
+                        nearestNPC = npc
+                    end
+                end
+            end
+        end
+    end
+    
+    return nearestNPC
+end
+
+local function findNearestForgeStation()
+    local hrp = getHumanoidRootPart()
+    if not hrp then return nil end
+    
+    local nearestForge = nil
+    local nearestDistance = math.huge
+    
+    for _, obj in pairs(workspace:GetDescendants()) do
+        if obj:IsA("Model") and (obj.Name:lower():find("forge") or obj.Name:lower():find("anvil") or obj.Name:lower():find("craft")) then
+            local forgePart = obj:FindFirstChild("Part") or obj:FindFirstChildWhichIsA("BasePart")
+            if forgePart then
+                local distance = (hrp.Position - forgePart.Position).Magnitude
+                if distance < nearestDistance and distance < 1000 then
+                    nearestDistance = distance
+                    nearestForge = obj
+                end
+            end
+        end
+    end
+    
+    return nearestForge
+end
+
 -- Auto Mining Function
 local function startAutoMining()
     if farmConnection then
         farmConnection:Disconnect()
     end
+    
+    enableNoclip()
+    equipPickaxe()
+    startAutoTap()
     
     farmConnection = RunService.Heartbeat:Connect(function()
         if not autoMining then return end
@@ -198,9 +351,6 @@ local function startAutoMining()
                 if distance > miningRange then
                     tweenTo(ore.Position + Vector3.new(0, 5, 0), flySpeed)
                 else
-                    equipPickaxe()
-                    wait(0.1)
-                    activateTool()
                     forge(ore.Parent)
                     statsCollected = statsCollected + 1
                 end
@@ -217,6 +367,10 @@ local function startAutoKill()
         killConnection:Disconnect()
     end
     
+    enableNoclip()
+    equipWeapon()
+    startAutoTap()
+    
     killConnection = RunService.Heartbeat:Connect(function()
         if not autoKillZombie then return end
         
@@ -232,7 +386,6 @@ local function startAutoKill()
                     tweenTo(zombieHrp.Position + Vector3.new(0, 3, 0), flySpeed)
                 else
                     hrp.CFrame = CFrame.new(hrp.Position, zombieHrp.Position)
-                    activateTool()
                     
                     local zombieHumanoid = zombie:FindFirstChild("Humanoid")
                     if zombieHumanoid and zombieHumanoid.Health <= 0 then
@@ -243,6 +396,78 @@ local function startAutoKill()
         end
         
         wait(0.3)
+    end)
+end
+
+-- Auto Sell Function
+local function startAutoSell()
+    if sellConnection then
+        sellConnection:Disconnect()
+    end
+    
+    enableNoclip()
+    
+    sellConnection = RunService.Heartbeat:Connect(function()
+        if not autoSell then return end
+        
+        local npc = findNearestSellNPC()
+        if npc then
+            local hrp = getHumanoidRootPart()
+            local npcPart = npc:FindFirstChild("HumanoidRootPart") or npc:FindFirstChildWhichIsA("BasePart")
+            
+            if hrp and npcPart then
+                local distance = (hrp.Position - npcPart.Position).Magnitude
+                
+                if distance > 10 then
+                    tweenTo(npcPart.Position + Vector3.new(0, 3, 0), flySpeed)
+                else
+                    openDialogue(npc)
+                    wait(0.5)
+                    runDialogueCommand("Sell")
+                    itemsSold = itemsSold + 1
+                    wait(2)
+                end
+            end
+        end
+        
+        wait(1)
+    end)
+end
+
+-- Auto Forge Function
+local function startAutoForge()
+    if forgeConnection then
+        forgeConnection:Disconnect()
+    end
+    
+    enableNoclip()
+    
+    forgeConnection = RunService.Heartbeat:Connect(function()
+        if not autoForge then return end
+        
+        local forgeStation = findNearestForgeStation()
+        if forgeStation then
+            local hrp = getHumanoidRootPart()
+            local forgePart = forgeStation:FindFirstChild("Part") or forgeStation:FindFirstChildWhichIsA("BasePart")
+            
+            if hrp and forgePart then
+                local distance = (hrp.Position - forgePart.Position).Magnitude
+                
+                if distance > 10 then
+                    tweenTo(forgePart.Position + Vector3.new(0, 3, 0), flySpeed)
+                else
+                    forge(forgeStation)
+                    openDialogue(forgeStation)
+                    wait(0.5)
+                    runDialogueCommand("Craft")
+                    runDialogueCommand("Forge")
+                    itemsForged = itemsForged + 1
+                    wait(2)
+                end
+            end
+        end
+        
+        wait(1)
     end)
 end
 
@@ -292,7 +517,7 @@ local antiAFKToggle = Tabs.MainTab:Toggle({
 				end
 			end)
 			
-			WindUI:Notify({
+			NatHub:Notify({
 				Title = "Anti AFK Enabled",
 				Content = "You will no longer be kicked for inactivity.",
 				Icon = "shield-check",
@@ -306,7 +531,7 @@ local antiAFKToggle = Tabs.MainTab:Toggle({
 				afkConnection = nil
 			end
 			
-			WindUI:Notify({
+			NatHub:Notify({
 				Title = "Anti AFK Disabled",
 				Content = "Anti AFK protection has been turned off.",
 				Icon = "shield-off",
@@ -343,14 +568,14 @@ Tabs.MainTab:Button({
 	Callback = function() 
 		if antiAFKEnabled then
 			performAntiAFK()
-			WindUI:Notify({
+			NatHub:Notify({
 				Title = "Manual Action",
 				Content = "Anti AFK action performed manually.",
 				Icon = "mouse-pointer-2",
 				Duration = 3,
 			})
 		else
-			WindUI:Notify({
+			NatHub:Notify({
 				Title = "Error",
 				Content = "Please enable Anti AFK first.",
 				Icon = "alert-circle",
@@ -379,9 +604,9 @@ local miningToggle = Tabs.FarmTab:Toggle({
         
         if state then
             startAutoMining()
-            WindUI:Notify({
+            NatHub:Notify({
                 Title = "Auto Mining Enabled",
-                Content = "Bot will now automatically mine ores.",
+                Content = "Bot will now automatically mine with noclip.",
                 Icon = "pickaxe",
                 Duration = 3,
             })
@@ -390,25 +615,15 @@ local miningToggle = Tabs.FarmTab:Toggle({
                 farmConnection:Disconnect()
                 farmConnection = nil
             end
-            WindUI:Notify({
+            disableNoclip()
+            stopAutoTap()
+            NatHub:Notify({
                 Title = "Auto Mining Disabled",
                 Content = "Auto mining has been stopped.",
                 Icon = "x",
                 Duration = 3,
             })
         end
-    end
-})
-
-Tabs.FarmTab:Slider({
-    Title = "Fly Speed",
-    Value = {
-        Min = 20,
-        Max = 150,
-        Default = 50,
-    },
-    Callback = function(value)
-        flySpeed = value
     end
 })
 
@@ -421,6 +636,120 @@ Tabs.FarmTab:Slider({
     },
     Callback = function(value)
         miningRange = value
+    end
+})
+
+Tabs.FarmTab:Section({
+    Title = "Auto Sell",
+})
+
+Tabs.FarmTab:Paragraph{
+    Title = "Auto Sell Items",
+    Desc = "Automatically fly to merchant/shop NPC and sell your items."
+}
+
+local sellToggle = Tabs.FarmTab:Toggle({
+    Title = "Enable Auto Sell",
+    Icon = "dollar-sign",
+    Default = false,
+    Callback = function(state)
+        autoSell = state
+        
+        if state then
+            startAutoSell()
+            NatHub:Notify({
+                Title = "Auto Sell Enabled",
+                Content = "Bot will now automatically sell items.",
+                Icon = "dollar-sign",
+                Duration = 3,
+            })
+        else
+            if sellConnection then
+                sellConnection:Disconnect()
+                sellConnection = nil
+            end
+            disableNoclip()
+            NatHub:Notify({
+                Title = "Auto Sell Disabled",
+                Content = "Auto sell has been stopped.",
+                Icon = "x",
+                Duration = 3,
+            })
+        end
+    end
+})
+
+Tabs.FarmTab:Button({
+    Title = "Sell Items Once",
+    Desc = "Manually sell items at nearest merchant",
+    Callback = function()
+        local npc = findNearestSellNPC()
+        if npc then
+            local npcPart = npc:FindFirstChild("HumanoidRootPart") or npc:FindFirstChildWhichIsA("BasePart")
+            if npcPart then
+                local hrp = getHumanoidRootPart()
+                if hrp then
+                    tweenTo(npcPart.Position, flySpeed)
+                    wait(2)
+                    openDialogue(npc)
+                    wait(0.5)
+                    runDialogueCommand("Sell")
+                end
+            end
+            NatHub:Notify({
+                Title = "Selling Items",
+                Content = "Flying to merchant to sell items.",
+                Icon = "shopping-bag",
+                Duration = 3,
+            })
+        else
+            NatHub:Notify({
+                Title = "No Merchant Found",
+                Content = "No merchant/shop NPC found nearby.",
+                Icon = "alert-circle",
+                Duration = 3,
+            })
+        end
+    end
+})
+
+Tabs.FarmTab:Section({
+    Title = "Auto Forge",
+})
+
+Tabs.FarmTab:Paragraph{
+    Title = "Auto Forge Items",
+    Desc = "Automatically fly to forge station and craft items."
+}
+
+local forgeToggle = Tabs.FarmTab:Toggle({
+    Title = "Enable Auto Forge",
+    Icon = "flame",
+    Default = false,
+    Callback = function(state)
+        autoForge = state
+        
+        if state then
+            startAutoForge()
+            NatHub:Notify({
+                Title = "Auto Forge Enabled",
+                Content = "Bot will now automatically forge items.",
+                Icon = "flame",
+                Duration = 3,
+            })
+        else
+            if forgeConnection then
+                forgeConnection:Disconnect()
+                forgeConnection = nil
+            end
+            disableNoclip()
+            NatHub:Notify({
+                Title = "Auto Forge Disabled",
+                Content = "Auto forge has been stopped.",
+                Icon = "x",
+                Duration = 3,
+            })
+        end
     end
 })
 
@@ -443,9 +772,9 @@ local killToggle = Tabs.CombatTab:Toggle({
         
         if state then
             startAutoKill()
-            WindUI:Notify({
+            NatHub:Notify({
                 Title = "Auto Kill Enabled",
-                Content = "Bot will now automatically kill zombies.",
+                Content = "Bot will now auto kill with weapon and noclip.",
                 Icon = "sword",
                 Duration = 3,
             })
@@ -454,7 +783,9 @@ local killToggle = Tabs.CombatTab:Toggle({
                 killConnection:Disconnect()
                 killConnection = nil
             end
-            WindUI:Notify({
+            disableNoclip()
+            stopAutoTap()
+            NatHub:Notify({
                 Title = "Auto Kill Disabled",
                 Content = "Auto kill has been stopped.",
                 Icon = "x",
@@ -477,14 +808,14 @@ Tabs.CombatTab:Button({
                     tweenTo(zombieHrp.Position, flySpeed)
                 end
             end
-            WindUI:Notify({
+            NatHub:Notify({
                 Title = "Targeting Zombie",
                 Content = "Flying to nearest zombie.",
                 Icon = "crosshair",
                 Duration = 3,
             })
         else
-            WindUI:Notify({
+            NatHub:Notify({
                 Title = "No Zombie Found",
                 Content = "No zombies detected nearby.",
                 Icon = "alert-circle",
@@ -506,12 +837,38 @@ Tabs.MiscTab:Button({
         statsCollected = 0
         zombiesKilled = 0
         actionCount = 0
-        WindUI:Notify({
+        itemsSold = 0
+        itemsForged = 0
+        NatHub:Notify({
             Title = "Stats Reset",
             Content = "All statistics have been reset.",
             Icon = "refresh-ccw",
             Duration = 3,
         })
+    end
+})
+
+Tabs.MiscTab:Button({
+    Title = "Check Equipment",
+    Desc = "Get player equipment information",
+    Callback = function()
+        local equipment = getPlayerEquipment()
+        if equipment then
+            NatHub:Notify({
+                Title = "Equipment Info",
+                Content = "Equipment data retrieved successfully.",
+                Icon = "package",
+                Duration = 3,
+            })
+            print("Equipment Info:", equipment)
+        else
+            NatHub:Notify({
+                Title = "Error",
+                Content = "Failed to get equipment info.",
+                Icon = "alert-circle",
+                Duration = 3,
+            })
+        end
     end
 })
 
@@ -522,7 +879,7 @@ Tabs.MiscTab:Button({
         local hrp = getHumanoidRootPart()
         if hrp then
             hrp.CFrame = CFrame.new(0, 50, 0)
-            WindUI:Notify({
+            NatHub:Notify({
                 Title = "Teleported",
                 Content = "Teleported to spawn.",
                 Icon = "home",
@@ -538,7 +895,7 @@ Tabs.InfoTab:Section({
 })
 
 Tabs.InfoTab:Paragraph{
-	Title = "The Forge - Complete Hub",
+	Title = "NatHub Development",
 	Desc = "Version: 2.0\nGame ID: 76558904092080\n\nAll-in-one script with Anti AFK, Auto Mining, and Auto Kill features."
 }
 
@@ -548,13 +905,13 @@ Tabs.InfoTab:Section({
 
 local allStatsText = Tabs.InfoTab:Paragraph{
 	Title = "Session Statistics",
-	Desc = "Anti AFK Actions: 0\nOres Collected: 0\nZombies Killed: 0"
+	Desc = "Anti AFK Actions: 0\nOres Collected: 0\nZombies Killed: 0\nItems Sold: 0\nItems Forged: 0"
 }
 
 -- Update all stats
 spawn(function()
 	while wait(2) do
-		allStatsText:SetDesc(string.format("Anti AFK Actions: %d\nOres Collected: %d\nZombies Killed: %d", actionCount, statsCollected, zombiesKilled))
+		allStatsText:SetDesc(string.format("Anti AFK Actions: %d\nOres Collected: %d\nZombies Killed: %d\nItems Sold: %d\nItems Forged: %d", actionCount, statsCollected, zombiesKilled, itemsSold, itemsForged))
 	end
 end)
 
@@ -564,19 +921,19 @@ Tabs.InfoTab:Section({
 
 Tabs.InfoTab:Paragraph{
 	Title = "Complete Feature List",
-	Desc = "• Anti AFK with auto input simulation\n• Auto Mining with fly system\n• Auto Kill Zombie\n• Adjustable fly speed & range\n• Session statistics\n• Remote service integration"
+	Desc = "• Anti AFK with auto input simulation\n• Auto Mining with noclip & auto-tap\n• Auto Kill NPC with weapon & auto-tap\n• Auto Sell to Merchant/Shop\n• Auto Forge crafting\n• Fixed fly speed (50)\n• Noclip enabled during farming\n• Session statistics\n• Remote service integration"
 }
 
 Tabs.InfoTab:Paragraph{
 	Title = "Remote Services Used",
-	Desc = "• ToolService (Tool activation)\n• CharacterService (Equip items)\n• ProximityService (Forge/Mine)\n• All official game services"
+	Desc = "• ToolService (Tool activation)\n• CharacterService (Equip items)\n• ProximityService (Dialogue, Forge)\n• DialogueService (Run commands)\n• StatusService (Equipment info)\n• All official game services"
 }
 
 Tabs.InfoTab:Button({
 	Title = "Test Notification",
 	Desc = "Click to test notification system",
 	Callback = function() 
-		WindUI:Notify({
+		NatHub:Notify({
 			Title = "Test Notification",
 			Content = "Notification system is working correctly!",
 			Icon = "bell",
@@ -586,7 +943,7 @@ Tabs.InfoTab:Button({
 })
 
 -- Initial notification
-WindUI:Notify({
+NatHub:Notify({
 	Title = "The Forge - Complete Hub",
 	Content = "Script loaded successfully!\nAll features ready to use.",
 	Icon = "check-circle",
@@ -594,3 +951,4 @@ WindUI:Notify({
 })
 
 print("The Forge - Complete Hub script loaded successfully!")
+
