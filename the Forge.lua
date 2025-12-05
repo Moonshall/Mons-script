@@ -23,7 +23,7 @@ local Services = {
 local NatHub = loadstring(game:HttpGet("https://raw.githubusercontent.com/dy1zn4t/bmF0dWk-/refs/heads/main/ui.lua"))()
 
 local Window = NatHub:CreateWindow({
-	Title = "The Forge Script",
+	Title = "NatHub",
 	Icon = "rbxassetid://113216930555884",
 	Author = "Script Hub",
 	Folder = "TheForgeHub",
@@ -36,11 +36,9 @@ local Window = NatHub:CreateWindow({
 -- Create Tabs (NatHub format)
 local Tabs = {
     InfoTab = Window:Tab({ Title = "Info", Icon = "info", Desc = "Information about the script." }),
-	MainTab = Window:Tab({ Title = "Anti AFK", Icon = "shield", Desc = "Bypass Roblox 20 minute AFK detection." }),
 	FarmTab = Window:Tab({ Title = "Auto Farm", Icon = "pickaxe", Desc = "Auto mining and farming features." }),
 	CombatTab = Window:Tab({ Title = "Combat", Icon = "sword", Desc = "Auto kill zombie and combat features." }),
 	MiscTab = Window:Tab({ Title = "Misc", Icon = "settings", Desc = "Miscellaneous settings." }),
-	
 }
 
 Window:SelectTab(1)
@@ -544,7 +542,13 @@ local function startAutoMining()
                 end
                 
                 if distance > miningRange then
-                    tweenTo(ore.Position + Vector3.new(0, 5, 0), flySpeed)
+                    local targetPos = ore.Position + Vector3.new(0, 5, 0)
+                    tweenTo(targetPos, flySpeed)
+                    
+                    -- Ensure flying/noclip is active
+                    if not isFlying then
+                        enableNoclip()
+                    end
                 else
                     local char = getCharacter()
                     if char and not char:FindFirstChildOfClass("Tool") then
@@ -666,59 +670,6 @@ end
 
 -- UI ELEMENTS
 
--- Main Tab
-Tabs.MainTab:Section({
-	Title = "Anti AFK Status",
-})
-
-Tabs.MainTab:Paragraph{
-	Title = "About Anti AFK",
-	Desc = "This feature prevents Roblox from kicking you after 20 minutes of inactivity."
-}
-
-Tabs.MainTab:Toggle({
-	Title = "Enable Anti AFK",
-	Icon = "shield-check",
-	Default = false,
-	Callback = function(state)
-		antiAFKEnabled = state
-		
-		if state then
-			if afkConnection then
-				afkConnection:Disconnect()
-			end
-			
-			afkConnection = RunService.Heartbeat:Connect(function()
-				if tick() - lastAction >= 60 then
-					performAntiAFK()
-				end
-			end)
-			
-			LocalPlayer.Idled:connect(function()
-				if antiAFKEnabled then
-					VirtualUser:CaptureController()
-					VirtualUser:ClickButton2(Vector2.new())
-				end
-			end)
-		else
-			if afkConnection then
-				afkConnection:Disconnect()
-				afkConnection = nil
-			end
-		end
-	end
-})
-
-Tabs.MainTab:Button({
-	Title = "Manual Action",
-	Desc = "Trigger anti-AFK manually",
-	Callback = function()
-		if antiAFKEnabled then
-			performAntiAFK()
-		end
-	end
-})
-
 -- Farm Tab
 Tabs.FarmTab:Section({
 	Title = "Auto Mining",
@@ -779,42 +730,6 @@ Tabs.FarmTab:Slider({
 	},
 	Callback = function(value)
 		flySpeed = value
-	end
-})
-
-Tabs.FarmTab:Section({
-	Title = "Anti-Cheat Protection",
-})
-
-Tabs.FarmTab:Paragraph{
-	Title = "Safety Features",
-	Desc = "Enable these to avoid anti-cheat detection."
-}
-
-Tabs.FarmTab:Toggle({
-	Title = "Anti-Cheat Bypass",
-	Icon = "shield",
-	Default = true,
-	Callback = function(state)
-		useAntiCheat = state
-	end
-})
-
-Tabs.FarmTab:Toggle({
-	Title = "Random Delays",
-	Icon = "clock",
-	Default = true,
-	Callback = function(state)
-		randomDelays = state
-	end
-})
-
-Tabs.FarmTab:Toggle({
-	Title = "Humanized Speed",
-	Icon = "activity",
-	Default = true,
-	Callback = function(state)
-		humanizedSpeed = state
 	end
 })
 
@@ -880,6 +795,58 @@ Tabs.CombatTab:Toggle({
 })
 
 -- Misc Tab
+Tabs.MiscTab:Section({
+	Title = "Anti AFK",
+})
+
+Tabs.MiscTab:Paragraph{
+	Title = "Anti AFK Bypass",
+	Desc = "Prevents Roblox from kicking you after 20 minutes of inactivity."
+}
+
+Tabs.MiscTab:Toggle({
+	Title = "Enable Anti AFK",
+	Icon = "shield-check",
+	Default = false,
+	Callback = function(state)
+		antiAFKEnabled = state
+		
+		if state then
+			if afkConnection then
+				afkConnection:Disconnect()
+			end
+			
+			afkConnection = RunService.Heartbeat:Connect(function()
+				if tick() - lastAction >= 60 then
+					performAntiAFK()
+				end
+			end)
+			
+			LocalPlayer.Idled:connect(function()
+				if antiAFKEnabled then
+					VirtualUser:CaptureController()
+					VirtualUser:ClickButton2(Vector2.new())
+				end
+			end)
+		else
+			if afkConnection then
+				afkConnection:Disconnect()
+				afkConnection = nil
+			end
+		end
+	end
+})
+
+Tabs.MiscTab:Button({
+	Title = "Manual AFK Action",
+	Desc = "Trigger anti-AFK manually",
+	Callback = function()
+		if antiAFKEnabled then
+			performAntiAFK()
+		end
+	end
+})
+
 Tabs.MiscTab:Section({
 	Title = "Testing",
 })
