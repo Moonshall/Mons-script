@@ -401,6 +401,44 @@ local function findNearestOre()
     return nearestOre
 end
 
+local function findNearestSellNPC()
+    local hrp = getHumanoidRootPart()
+    if not hrp then return nil end
+    
+    local nearestNPC = nil
+    local nearestDistance = math.huge
+    
+    -- NPC names from list
+    local npcNames = {"Brakk", "Lira", "Oskar", "Tolin", "Mira", "Kaen", "Sela", "Drax", "Fynn", "Valeen", 
+                      "Rudo", "Elwyn", "Jarrick", "Nora", "Taro", "Garm", "Vella", "Kard", "Myra", "Thorne",
+                      "Merchant", "Shop", "Trader", "Vendor"}
+    
+    for _, npc in pairs(workspace:GetDescendants()) do
+        if npc:IsA("Model") then
+            local found = false
+            for _, name in pairs(npcNames) do
+                if npc.Name:lower():find(name:lower()) then
+                    found = true
+                    break
+                end
+            end
+            
+            if found then
+                local npcHrp = npc:FindFirstChild("HumanoidRootPart") or npc:FindFirstChildWhichIsA("BasePart")
+                if npcHrp then
+                    local distance = (hrp.Position - npcHrp.Position).Magnitude
+                    if distance < nearestDistance and distance < 1000 then
+                        nearestDistance = distance
+                        nearestNPC = npc
+                    end
+                end
+            end
+        end
+    end
+    
+    return nearestNPC
+end
+
 local function findNearestZombie()
     local hrp = getHumanoidRootPart()
     if not hrp then return nil end
@@ -498,7 +536,10 @@ local function tweenTo(targetPos, speed)
     
     tween:Play()
     tween.Completed:Connect(function()
-        disableNoclip()
+        -- Don't disable noclip immediately if still farming
+        if not autoMining and not autoKillZombie then
+            disableNoclip()
+        end
         -- Add small delay after arriving
         if useAntiCheat then
             wait(getRandomDelay(0.1, 0.2))
@@ -506,6 +547,18 @@ local function tweenTo(targetPos, speed)
     end)
     
     return tween
+end
+
+local function openDialogue(npc)
+    pcall(function()
+        Services.Proximity.RF.Dialogue:InvokeServer(npc)
+    end)
+end
+
+local function runDialogueCommand(command)
+    pcall(function()
+        Services.Dialogue.RF.RunCommand:InvokeServer(command)
+    end)
 end
 
 -- Auto Functions
@@ -544,11 +597,6 @@ local function startAutoMining()
                 if distance > miningRange then
                     local targetPos = ore.Position + Vector3.new(0, 5, 0)
                     tweenTo(targetPos, flySpeed)
-                    
-                    -- Ensure flying/noclip is active
-                    if not isFlying then
-                        enableNoclip()
-                    end
                 else
                     local char = getCharacter()
                     if char and not char:FindFirstChildOfClass("Tool") then
@@ -573,6 +621,54 @@ local function startAutoMining()
                     -- Add delay after mining
                     if useAntiCheat then
                         wait(getRandomDelay(0.3, 0.6))
+                    end
+                end
+            end
+        end
+        
+        wait(useAntiCheat and getRandomDelay(0.5, 1.0) or 0.5)
+    end)
+end
+
+local function startAutoSell()
+    if sellConnection then
+        sellConnection:Disconnect()
+    end
+    
+    sellConnection = RunService.Heartbeat:Connect(function()
+        if not autoSell then return end
+        
+        local npc = findNearestSellNPC()
+        if npc then
+            local hrp = getHumanoidRootPart()
+            local npcPart = npc:FindFirstChild("HumanoidRootPart") or npc:FindFirstChildWhichIsA("BasePart")
+            
+            if hrp and npcPart then
+                local distance = (hrp.Position - npcPart.Position).Magnitude
+                
+                if distance > 10 then
+                    tweenTo(npcPart.Position + Vector3.new(0, 3, 0), flySpeed)
+                else
+                    -- Stop and interact
+                    disableNoclip()
+                    
+                    openDialogue(npc)
+                    wait(0.5)
+                    
+                    -- Sell items
+                    if selectedSellItem == "All Items" then
+                        runDialogueCommand("Sell All")
+                        runDialogueCommand("Sell")
+                    else
+                        runDialogueCommand("Sell " .. selectedSellItem)
+                    end
+                    
+                    itemsSold = itemsSold + 1
+                    
+                    if useAntiCheat then
+                        wait(getRandomDelay(1.0, 2.0))
+                    else
+                        wait(2)
                     end
                 end
             end
@@ -730,6 +826,43 @@ Tabs.FarmTab:Slider({
 	},
 	Callback = function(value)
 		flySpeed = value
+	end
+})
+
+Tabs.FarmTab:Section({
+	Title = "Auto Sell",
+})
+
+Tabs.FarmTab:Paragraph{
+	Title = "Auto Sell Items",
+	Desc = "Automatically fly to merchant/shop NPC and sell your items."
+}
+
+Tabs.FarmTab:Dropdown({
+	Title = "Select Item to Sell",
+	Values = sellItemNames,
+	Value = "All Items",
+	Callback = function(value)
+		selectedSellItem = value
+	end
+})
+
+Tabs.FarmTab:Toggle({
+	Title = "Enable Auto Sell",
+	Icon = "dollar-sign",
+	Default = false,
+	Callback = function(state)
+		autoSell = state
+		
+		if state then
+			startAutoSell()
+		else
+			if sellConnection then
+				sellConnection:Disconnect()
+				sellConnection = nil
+			end
+			disableNoclip()
+		end
 	end
 })
 
