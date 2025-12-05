@@ -419,27 +419,48 @@ local function equipPickaxe()
         return true
     end
     
-    local pickaxeNames = {"Pickaxe", "Ember Pickaxe", "Titan Pick", "Crystal Carver", "Obsidian Drill", "Stone Pickaxe", "Iron Pickaxe"}
-    
+    -- First, try to find any pickaxe in backpack
     local backpack = LocalPlayer:FindFirstChild("Backpack")
     if backpack then
+        -- Try to find any tool with "pick" or "drill" in name
+        for _, tool in pairs(backpack:GetChildren()) do
+            if tool:IsA("Tool") then
+                local toolName = tool.Name:lower()
+                if toolName:find("pick") or toolName:find("drill") or toolName:find("mine") then
+                    local humanoid = getHumanoid()
+                    if humanoid then
+                        humanoid:EquipTool(tool)
+                        task.wait(0.1)
+                        return true
+                    end
+                end
+            end
+        end
+        
+        -- Fallback: specific pickaxe names
+        local pickaxeNames = {"Pickaxe", "Ember Pickaxe", "Titan Pick", "Crystal Carver", "Obsidian Drill", "Stone Pickaxe", "Iron Pickaxe", "Starter Pickaxe"}
         for _, pickaxeName in pairs(pickaxeNames) do
             local tool = backpack:FindFirstChild(pickaxeName)
             if tool and tool:IsA("Tool") then
                 local humanoid = getHumanoid()
                 if humanoid then
                     humanoid:EquipTool(tool)
+                    task.wait(0.1)
                     return true
                 end
             end
         end
     end
     
-    for _, name in pairs(pickaxeNames) do
-        pcall(function()
-            Services.Character.RF.EquipItem:InvokeServer(name)
-        end)
-    end
+    -- Try game-specific equip service
+    pcall(function()
+        for _, child in pairs(backpack:GetChildren()) do
+            if child:IsA("Tool") and (child.Name:lower():find("pick") or child.Name:lower():find("drill")) then
+                Services.Character.RF.EquipItem:InvokeServer(child.Name)
+                task.wait(0.1)
+            end
+        end
+    end)
     
     task.wait(0.2)
     return char:FindFirstChildOfClass("Tool") ~= nil
@@ -451,11 +472,33 @@ local function equipWeapon()
     
     local currentTool = char:FindFirstChildOfClass("Tool")
     if currentTool and (currentTool.Name:lower():find("sword") or currentTool.Name:lower():find("blade") or 
-                        currentTool.Name:lower():find("axe") or currentTool.Name:lower():find("hammer")) then
+                        currentTool.Name:lower():find("axe") or currentTool.Name:lower():find("hammer") or
+                        currentTool.Name:lower():find("weapon") or currentTool.Name:lower():find("dagger")) then
         return true
     end
     
-    local weaponNames = {"Sword", "Frostbite Blade", "Shadow Cleaver", "Void Hammer", "Stormbreaker Axe", "Molten Warhammer", "Iron Sword", "Steel Blade"}
+    -- First, try to find any weapon in backpack
+    local backpack = LocalPlayer:FindFirstChild("Backpack")
+    if backpack then
+        -- Try to find any weapon tool
+        for _, tool in pairs(backpack:GetChildren()) do
+            if tool:IsA("Tool") then
+                local toolName = tool.Name:lower()
+                if toolName:find("sword") or toolName:find("blade") or toolName:find("axe") or 
+                   toolName:find("hammer") or toolName:find("weapon") or toolName:find("dagger") or
+                   toolName:find("katana") or toolName:find("scythe") then
+                    local humanoid = getHumanoid()
+                    if humanoid then
+                        humanoid:EquipTool(tool)
+                        task.wait(0.1)
+                        return true
+                    end
+                end
+            end
+        end
+    end
+    
+    local weaponNames = {"Sword", "Frostbite Blade", "Shadow Cleaver", "Void Hammer", "Stormbreaker Axe", "Molten Warhammer", "Iron Sword", "Steel Blade", "Starter Sword"}
     
     local backpack = LocalPlayer:FindFirstChild("Backpack")
     if backpack then
@@ -743,7 +786,17 @@ local function startAutoMining()
                     -- Position underground at set distance below ore
                     local targetPos = ore.Position + Vector3.new(0, undergroundDistance, 0)
                     tweenTo(targetPos, flySpeed)
+                    
+                    -- Make character face upward when underground
+                    if undergroundDistance < 0 then
+                        hrp.CFrame = CFrame.new(hrp.Position, ore.Position)
+                    end
                 else
+                    -- Face upward to ore when close
+                    if undergroundDistance < 0 then
+                        hrp.CFrame = CFrame.new(hrp.Position, ore.Position)
+                    end
+                    
                     local char = getCharacter()
                     if char and not char:FindFirstChildOfClass("Tool") then
                         equipPickaxe()
@@ -886,9 +939,16 @@ local function startAutoKill()
                 if distance > 8 then
                     -- Position at underground distance below NPC
                     tweenTo(zombieHrp.Position + Vector3.new(0, undergroundDistance, 0), flySpeed)
+                    
+                    -- Make character face upward to NPC when underground
+                    if undergroundDistance < 0 then
+                        hrp.CFrame = CFrame.new(hrp.Position, zombieHrp.Position)
+                    end
                 else
-                    -- More natural facing
-                    if useAntiCheat then
+                    -- Face upward to target when underground, otherwise natural facing
+                    if undergroundDistance < 0 then
+                        hrp.CFrame = CFrame.new(hrp.Position, zombieHrp.Position)
+                    elseif useAntiCheat then
                         local lookAt = CFrame.new(hrp.Position, zombieHrp.Position)
                         hrp.CFrame = hrp.CFrame:Lerp(lookAt, 0.5)
                     else
