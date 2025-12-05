@@ -19,17 +19,51 @@ local Services = {
     Tool = ReplicatedStorage.Shared.Packages.Knit.Services.ToolService,
 }
 
--- Load UI Library
-local NatHub = loadstring(game:HttpGet("https://raw.githubusercontent.com/dy1zn4t/bmF0dWk-/refs/heads/main/ui.lua"))()
+-- Load UI Library with error handling
+local NatHub
+local uiLoaded = false
+
+-- Try NatHub first
+pcall(function()
+    local uiCode = game:HttpGet("https://raw.githubusercontent.com/dy1zn4t/bmF0dWk-/refs/heads/main/ui.lua")
+    if uiCode and #uiCode > 100 then
+        NatHub = loadstring(uiCode)()
+        if NatHub and type(NatHub) == "table" and NatHub.CreateWindow then
+            uiLoaded = true
+        end
+    end
+end)
+
+-- Fallback to Rayfield UI if NatHub fails
+if not uiLoaded then
+    warn("NatHub failed to load, using Rayfield UI...")
+    pcall(function()
+        NatHub = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+        if NatHub then
+            uiLoaded = true
+        end
+    end)
+end
+
+-- Last resort: basic notification
+if not uiLoaded then
+    game:GetService("StarterGui"):SetCore("SendNotification", {
+        Title = "UI Load Error";
+        Text = "Failed to load UI library. Script will run with basic controls.";
+        Duration = 5;
+    })
+    error("Failed to load any UI library. Please check your internet connection.")
+end
+
 local Window = NatHub:CreateWindow({
-	Title = "NatHub",
+	Title = "The Forge Script",
 	Icon = "rbxassetid://113216930555884",
 	Author = "Script Hub",
-	Folder = "NatHub",
+	Folder = "TheForgeHub",
 	Size = UDim2.fromOffset(580, 460),
 	LiveSearchDropdown = true,
     AutoSave = true,
-    FileSaveName = "NatHub_Config.json",
+    FileSaveName = "TheForge_Config.json",
 })
 
 -- Create Tabs
@@ -72,7 +106,7 @@ local itemsSold = 0
 local itemsForged = 0
 
 -- Ore Names List
-local oreNames = {"All","Stone", "Emberstone", "Frost Ore", "Ironcore", "Shadow Shard", "Glimmer Crystal", 
+local oreNames = {"All","Pebble","Stone", "Emberstone", "Frost Ore", "Ironcore", "Shadow Shard", "Glimmer Crystal", 
                   "Nova Ore", "Titan Rock", "Luminite", "Darksteel Chunk", "Magma Fragment",
                   "Storm Quartz", "Ancient Relic Stone", "Void Ore", "Copperlite", "Starfall Gem",
                   "Dragonstone", "Rune Ore", "Crystaline Rock", "Obsidian Core", "Radiant Gem"}
