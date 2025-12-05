@@ -1075,13 +1075,13 @@ Tabs.InfoTab:Button({
 	end
 })
 
--- Initial notification
-NatHub:Notify({
-	Title = "The Forge - Complete Hub",
-	Content = "Script loaded successfully!\nAll features ready to use.",
-	Icon = "check-circle",
-	Duration = 6,
-})
+-- Initial notification (commented out to prevent spam)
+-- NatHub:Notify({
+-- 	Title = "The Forge - Complete Hub",
+-- 	Content = "Script loaded successfully!\nAll features ready to use.",
+-- 	Icon = "check-circle",
+-- 	Duration = 6,
+-- })
 
 print("The Forge - Complete Hub script loaded successfully!")
 
