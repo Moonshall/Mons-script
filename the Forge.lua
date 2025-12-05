@@ -68,6 +68,7 @@ local actionCount = 0
 local autoMining = false
 local autoKillZombie = false
 local autoSell = false
+local isUIVisible = false
 local autoForge = false
 local selectedOre = "Stone"
 local selectedNPC = "Zombie"
@@ -93,7 +94,7 @@ local humanizedSpeed = true
 local randomDelays = true
 
 -- Ore Names List
-local oreNames = {"Stone", "Emberstone", "Frost Ore", "Ironcore", "Shadow Shard", "Glimmer Crystal", 
+local oreNames = {"Pebble","Rock", "Emberstone", "Frost Ore", "Ironcore", "Shadow Shard", "Glimmer Crystal", 
                   "Nova Ore", "Titan Rock", "Luminite", "Darksteel Chunk", "Magma Fragment",
                   "Storm Quartz", "Ancient Relic Stone", "Void Ore", "Copperlite", "Starfall Gem",
                   "Dragonstone", "Rune Ore", "Crystaline Rock", "Obsidian Core", "Radiant Gem"}
@@ -257,6 +258,7 @@ local function startMiningTap()
     
     miningTapConnection = RunService.RenderStepped:Connect(function()
         if not autoMining then return end
+        if isUIVisible then return end -- Don't tap when UI is open
         
         local currentTime = tick()
         if currentTime - lastTapTime >= tapDelay then
@@ -282,6 +284,7 @@ local function startKillTap()
     
     killTapConnection = RunService.RenderStepped:Connect(function()
         if not autoKillZombie then return end
+        if isUIVisible then return end -- Don't tap when UI is open
         
         local currentTime = tick()
         if currentTime - lastTapTime >= tapDelay then
@@ -380,33 +383,32 @@ local function findNearestOre()
     
     for _, obj in pairs(workspace:GetDescendants()) do
         if obj:IsA("Model") then
+            -- Exclude pickaxes, tools, and player-owned objects
+            local objNameLower = obj.Name:lower()
+            if objNameLower:find("pickaxe") or objNameLower:find("sword") or objNameLower:find("weapon") or objNameLower:find("tool") or objNameLower:find("axe") or objNameLower:find("stonewakes") then
+                continue
+            end
+            
+            -- Exclude if parent is a player or character
+            local parent = obj.Parent
+            if parent and (parent.Name == game.Players.LocalPlayer.Name or parent:FindFirstChild("Humanoid")) then
+                continue
+            end
+            
             local isOre = false
             
-            if obj.Name:lower():find("ore") or obj.Name:lower():find("rock") or obj.Name:lower():find("stone") then
+            -- Must match selected ore type exactly
+            if obj.Name:find(selectedOre) then
                 isOre = true
-            else
-                for _, oreName in pairs(oreNames) do
-                    if obj.Name:find(oreName) then
-                        isOre = true
-                        break
-                    end
-                end
             end
             
             if isOre then
-                -- Filter by selected ore type (must match)
-                if not obj.Name:find(selectedOre) then
-                    isOre = false
-                end
-                
-                if isOre then
-                    local orePart = obj:FindFirstChild("Part") or obj:FindFirstChildWhichIsA("BasePart")
-                    if orePart then
-                        local distance = (hrp.Position - orePart.Position).Magnitude
-                        if distance < nearestDistance and distance < 500 then
-                            nearestDistance = distance
-                            nearestOre = orePart
-                        end
+                local orePart = obj:FindFirstChild("Part") or obj:FindFirstChildWhichIsA("BasePart")
+                if orePart then
+                    local distance = (hrp.Position - orePart.Position).Magnitude
+                    if distance < nearestDistance and distance < 500 then
+                        nearestDistance = distance
+                        nearestOre = orePart
                     end
                 end
             end
@@ -1096,4 +1098,39 @@ spawn(function()
 			statsLabel:SetDesc("AFK Actions: "..actionCount.." | Ores: "..statsCollected.." | Kills: "..zombiesKilled)
 		end)
 	end
+end)
+
+-- UI Toggle Detection (for auto tap)
+local UserInputService = game:GetService("UserInputService")
+local ToggleKey = Enum.KeyCode.RightShift -- Default toggle key for NatHub
+
+-- Detect UI visibility changes
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if input.KeyCode == ToggleKey and not gameProcessed then
+        isUIVisible = not isUIVisible
+        
+        -- Debug notification (optional - can be removed)
+        if isUIVisible then
+            print("UI Opened - Auto Tap Paused")
+        else
+            print("UI Closed - Auto Tap Active")
+        end
+    end
+end)
+
+-- Alternative: Monitor ScreenGui visibility
+spawn(function()
+    while wait(0.5) do
+        pcall(function()
+            local playerGui = game.Players.LocalPlayer:WaitForChild("PlayerGui")
+            local natHubGui = playerGui:FindFirstChild("NatHub") or playerGui:FindFirstChild("ScreenGui")
+            
+            if natHubGui then
+                local mainFrame = natHubGui:FindFirstChildWhichIsA("Frame", true)
+                if mainFrame and mainFrame.Visible ~= nil then
+                    isUIVisible = mainFrame.Visible
+                end
+            end
+        end)
+    end
 end)
