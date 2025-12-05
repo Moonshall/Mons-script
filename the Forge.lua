@@ -226,7 +226,7 @@ local function mobileTouch()
     end)
 end
 
--- Tool Activation (No cursor interference - your mouse stays free!)
+-- Tool Activation (Multiple methods for compatibility)
 local function activateTool()
     local char = getCharacter()
     if not char then return end
@@ -244,10 +244,26 @@ local function activateTool()
         tool:Activate()
     end)
     
-    -- Method 3: For mobile devices only
+    -- Method 3: VirtualInputManager click on viewport (works for most games)
+    pcall(function()
+        local VIM = game:GetService("VirtualInputManager")
+        local Camera = workspace.CurrentCamera
+        local ViewportSize = Camera.ViewportSize
+        
+        -- Click at center of screen
+        local centerX = ViewportSize.X / 2
+        local centerY = ViewportSize.Y / 2
+        
+        -- Send click event (doesn't move visible cursor)
+        VIM:SendMouseButtonEvent(centerX, centerY, 0, true, game, 0)
+        task.wait(0.01)
+        VIM:SendMouseButtonEvent(centerX, centerY, 0, false, game, 0)
+    end)
+    
+    -- Method 4: Mobile touch simulation
     mobileTouch()
     
-    -- Method 4: Tool remote events (if exists)
+    -- Method 5: Tool remote events (if exists)
     pcall(function()
         if tool:FindFirstChild("RemoteEvent") then
             tool.RemoteEvent:FireServer()
@@ -255,6 +271,11 @@ local function activateTool()
         if tool:FindFirstChild("RemoteFunction") then
             tool.RemoteFunction:InvokeServer()
         end
+    end)
+    
+    -- Method 6: Mouse1Click simulation
+    pcall(function()
+        mouse1click()
     end)
 end
 
