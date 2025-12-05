@@ -38,7 +38,7 @@ if not success or not NatHub then
 end
 
 local Window = NatHub:CreateWindow({
-	Title = "NatHub",
+	Title = "NatHub-Mons",
 	Icon = "rbxassetid://113216930555884",
 	Author = "Script Hub",
 	Folder = "TheForgeHub",
@@ -72,7 +72,7 @@ local isUIVisible = false
 local autoForge = false
 local selectedOre = "Stone"
 local selectedNPC = "Zombie"
-local selectedSellItem = "All Items"
+local selectedSellCategory = "All Items"
 local flySpeed = 35 -- Reduced speed to avoid anti-cheat (was 50)
 local miningRange = 20
 local farmConnection = nil
@@ -93,20 +93,35 @@ local useAntiCheat = true
 local humanizedSpeed = true
 local randomDelays = true
 
--- Ore Names List
-local oreNames = {"Pebble","Rock", "Emberstone", "Frost Ore", "Ironcore", "Shadow Shard", "Glimmer Crystal", 
-                  "Nova Ore", "Titan Rock", "Luminite", "Darksteel Chunk", "Magma Fragment",
-                  "Storm Quartz", "Ancient Relic Stone", "Void Ore", "Copperlite", "Starfall Gem",
-                  "Dragonstone", "Rune Ore", "Crystaline Rock", "Obsidian Core", "Radiant Gem"}
+-- Ore Names List (Must match game exactly)
+local oreNames = {
+    "Stone", "Copper", "Iron", "Coal", "Silver", "Gold", "Emerald", "Ruby", "Sapphire",
+    "Diamond", "Obsidian", "Mithril", "Adamantite", "Runite", "Dragonstone", "Crystal",
+    "Void Stone", "Celestial Ore", "Dark Matter", "Starlight Ore"
+}
 
 -- NPC Names List for Auto Kill
 local npcNames = {"Zombie", "Skeleton", "Goblin", "Orc", "Troll", "Dragon", "Spider", "Wolf",
                   "Bear", "Bandit", "Ghost", "Demon", "Undead", "Monster", "Enemy"}
 
--- Item Names for Selling
-local sellItemNames = {"All Items", "Iron Shard", "Crystal Powder", "Forge Catalyst", "Binding Alloy",
-                        "Mystic Shard", "Dust Core", "Hardened Metal Plate", "Runic Essence",
-                        "Ember Dust", "Luminite Powder"}
+-- Sell by Rarity Categories
+local sellCategories = {
+    "All Items",
+    "Common",
+    "Uncommon",
+    "Rare",
+    "Epic",
+    "Legendary",
+    "Mythic",
+    "Exotic",
+    "Ancient",
+    "Divine",
+    "Exclusive",
+    "Limited",
+    "Event",
+    "Artifact",
+    "Quest Item"
+}
 
 -- Anti AFK Function
 local function performAntiAFK()
@@ -526,9 +541,15 @@ local function tweenTo(targetPos, speed)
     
     local distance = (hrp.Position - targetPos).Magnitude
     
+    -- Enable noclip for any distance movement
+    enableNoclip()
+    
     -- Don't tween if too close (looks suspicious)
-    if distance < 10 then
+    if distance < 5 then
         hrp.CFrame = CFrame.new(targetPos)
+        if not autoMining and not autoKillZombie then
+            disableNoclip()
+        end
         return
     end
     
@@ -538,8 +559,6 @@ local function tweenTo(targetPos, speed)
     if useAntiCheat then
         wait(getRandomDelay(0.1, 0.3))
     end
-    
-    enableNoclip()
     
     local TweenService = game:GetService("TweenService")
     -- Use Sine easing for more natural movement
@@ -672,12 +691,13 @@ local function startAutoSell()
                     openDialogue(npc)
                     wait(0.5)
                     
-                    -- Sell items
-                    if selectedSellItem == "All Items" then
+                    -- Sell items by category
+                    if selectedSellCategory == "All Items" then
                         runDialogueCommand("Sell All")
                         runDialogueCommand("Sell")
                     else
-                        runDialogueCommand("Sell " .. selectedSellItem)
+                        -- Sell by rarity category
+                        runDialogueCommand("Sell " .. selectedSellCategory)
                     end
                     
                     itemsSold = itemsSold + 1
@@ -856,11 +876,11 @@ Tabs.FarmTab:Paragraph{
 }
 
 Tabs.FarmTab:Dropdown({
-	Title = "Select Item to Sell",
-	Values = sellItemNames,
+	Title = "Select Rarity to Sell",
+	Values = sellCategories,
 	Value = "All Items",
 	Callback = function(value)
-		selectedSellItem = value
+		selectedSellCategory = value
 	end
 })
 
