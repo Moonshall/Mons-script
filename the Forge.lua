@@ -20,7 +20,22 @@ local Services = {
 }
 
 -- Load NatHub UI Library
-local NatHub = loadstring(game:HttpGet("https://raw.githubusercontent.com/dy1zn4t/bmF0dWk-/refs/heads/main/ui.lua"))()
+local success, NatHub = pcall(function()
+    local uiCode = game:HttpGet("https://raw.githubusercontent.com/dy1zn4t/bmF0dWk-/refs/heads/main/ui.lua")
+    if not uiCode or uiCode == "" then
+        error("Failed to fetch UI library")
+    end
+    return loadstring(uiCode)()
+end)
+
+if not success or not NatHub then
+    game:GetService("StarterGui"):SetCore("SendNotification", {
+        Title = "UI Load Error";
+        Text = "Failed to load NatHub UI. Please check your internet connection.";
+        Duration = 10;
+    })
+    error("Failed to load NatHub UI Library: " .. tostring(NatHub))
+end
 
 local Window = NatHub:CreateWindow({
 	Title = "NatHub",
