@@ -75,6 +75,7 @@ local selectedNPC = "Zombie"
 local selectedSellCategory = "All Items"
 local flySpeed = 35 -- Reduced speed to avoid anti-cheat (was 50)
 local miningRange = 20
+local undergroundDistance = -50 -- Distance below ground for mining (negative Y position)
 local farmConnection = nil
 local killConnection = nil
 local sellConnection = nil
@@ -552,8 +553,10 @@ local function tweenTo(targetPos, speed)
     
     local distance = (hrp.Position - targetPos).Magnitude
     
-    -- Enable noclip for any distance movement
-    enableNoclip()
+    -- Enable noclip for any distance movement or underground
+    if distance > 10 or targetPos.Y < 0 then
+        enableNoclip()
+    end
     
     -- Don't tween if too close (looks suspicious)
     if distance < 5 then
@@ -642,7 +645,8 @@ local function startAutoMining()
                 end
                 
                 if distance > miningRange then
-                    local targetPos = ore.Position + Vector3.new(0, 5, 0)
+                    -- Position underground at set distance below ore
+                    local targetPos = ore.Position + Vector3.new(0, undergroundDistance, 0)
                     tweenTo(targetPos, flySpeed)
                 else
                     local char = getCharacter()
@@ -785,7 +789,8 @@ local function startAutoKill()
                 end
                 
                 if distance > 8 then
-                    tweenTo(zombieHrp.Position + Vector3.new(0, 2, 0), flySpeed)
+                    -- Position at underground distance below NPC
+                    tweenTo(zombieHrp.Position + Vector3.new(0, undergroundDistance, 0), flySpeed)
                 else
                     -- More natural facing
                     if useAntiCheat then
@@ -854,28 +859,21 @@ Tabs.FarmTab:Toggle({
 })
 
 Tabs.FarmTab:Slider({
-	Title = "Mining Range",
+	Title = "Underground Distance",
 	Value = {
-		Min = 5,
-		Max = 50,
-		Default = 20,
+		Min = -200,
+		Max = 0,
+		Default = -50,
 	},
 	Callback = function(value)
-		miningRange = value
+		undergroundDistance = value
 	end
 })
 
-Tabs.FarmTab:Slider({
-	Title = "Fly Speed",
-	Value = {
-		Min = 20,
-		Max = 60,
-		Default = 35,
-	},
-	Callback = function(value)
-		flySpeed = value
-	end
-})
+Tabs.FarmTab:Paragraph{
+	Title = "Underground Mining",
+	Desc = "Mine from below! Negative = underground. 0 = surface. -50 = 50 studs below target. Safer from detection!"
+}
 
 Tabs.FarmTab:Section({
 	Title = "Auto Sell",
