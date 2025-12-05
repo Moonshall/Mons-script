@@ -55,6 +55,7 @@ local autoKillZombie = false
 local autoSell = false
 local autoForge = false
 local selectedOre = "All"
+local selectedNPC = "All"
 local selectedSellItem = "All Items"
 local flySpeed = 50
 local miningRange = 20
@@ -75,6 +76,10 @@ local oreNames = {"All", "Emberstone", "Frost Ore", "Ironcore", "Shadow Shard", 
                   "Nova Ore", "Titan Rock", "Luminite", "Darksteel Chunk", "Magma Fragment",
                   "Storm Quartz", "Ancient Relic Stone", "Void Ore", "Copperlite", "Starfall Gem",
                   "Dragonstone", "Rune Ore", "Crystaline Rock", "Obsidian Core", "Radiant Gem"}
+
+-- NPC Names List for Auto Kill
+local npcNames = {"All", "Zombie", "Skeleton", "Goblin", "Orc", "Troll", "Dragon", "Spider", "Wolf",
+                  "Bear", "Bandit", "Ghost", "Demon", "Undead", "Monster", "Enemy"}
 
 -- Item Names for Selling
 local sellItemNames = {"All Items", "Iron Shard", "Crystal Powder", "Forge Catalyst", "Binding Alloy",
@@ -119,15 +124,20 @@ local function getHumanoid()
     return char and char:FindFirstChild("Humanoid")
 end
 
--- Noclip Function
+-- Noclip Function (only active during flying)
+local isFlying = false
+
 local function enableNoclip()
     if noclipConnection then return end
+    isFlying = true
     noclipConnection = RunService.Stepped:Connect(function()
-        local char = getCharacter()
-        if char then
-            for _, part in pairs(char:GetDescendants()) do
-                if part:IsA("BasePart") then
-                    part.CanCollide = false
+        if isFlying then
+            local char = getCharacter()
+            if char then
+                for _, part in pairs(char:GetDescendants()) do
+                    if part:IsA("BasePart") then
+                        part.CanCollide = false
+                    end
                 end
             end
         end
@@ -135,6 +145,7 @@ local function enableNoclip()
 end
 
 local function disableNoclip()
+    isFlying = false
     if noclipConnection then
         noclipConnection:Disconnect()
         noclipConnection = nil
@@ -151,10 +162,14 @@ end
 
 -- Auto Tap Functions for Mining
 local function startMiningTap()
-    if miningTapConnection then return end
-    miningTapConnection = RunService.Heartbeat:Connect(function()
+    if miningTapConnection then
+        miningTapConnection:Disconnect()
+    end
+    miningTapConnection = RunService.RenderStepped:Connect(function()
         if autoMining then
-            activateTool()
+            pcall(function()
+                activateTool()
+            end)
         end
     end)
 end
@@ -168,10 +183,14 @@ end
 
 -- Auto Tap Functions for Killing
 local function startKillTap()
-    if killTapConnection then return end
-    killTapConnection = RunService.Heartbeat:Connect(function()
+    if killTapConnection then
+        killTapConnection:Disconnect()
+    end
+    killTapConnection = RunService.RenderStepped:Connect(function()
         if autoKillZombie then
-            activateTool()
+            pcall(function()
+                activateTool()
+            end)
         end
     end)
 end
@@ -238,14 +257,36 @@ local function findNearestZombie()
     local nearestDistance = math.huge
     
     for _, npc in pairs(workspace:GetDescendants()) do
-        if npc:IsA("Model") and npc:FindFirstChild("Humanoid") and npc.Name:lower():find("zombie") then
-            local npcHrp = npc:FindFirstChild("HumanoidRootPart")
+        if npc:IsA("Model") and npc:FindFirstChild("Humanoid") then
             local npcHumanoid = npc:FindFirstChild("Humanoid")
-            if npcHrp and npcHumanoid and npcHumanoid.Health > 0 then
-                local distance = (hrp.Position - npcHrp.Position).Magnitude
-                if distance < nearestDistance and distance < 500 then
-                    nearestDistance = distance
-                    nearestZombie = npc
+            if npcHumanoid and npcHumanoid.Health > 0 then
+                local isEnemy = false
+                
+                -- Check if it's an enemy NPC
+                if selectedNPC == "All" then
+                    -- Check against common enemy names
+                    for _, enemyName in pairs(npcNames) do
+                        if npc.Name:lower():find(enemyName:lower()) then
+                            isEnemy = true
+                            break
+                        end
+                    end
+                else
+                    -- Check for specific NPC
+                    if npc.Name:lower():find(selectedNPC:lower()) then
+                        isEnemy = true
+                    end
+                end
+                
+                if isEnemy then
+                    local npcHrp = npc:FindFirstChild("HumanoidRootPart")
+                    if npcHrp then
+                        local distance = (hrp.Position - npcHrp.Position).Magnitude
+                        if distance < nearestDistance and distance < 500 then
+                            nearestDistance = distance
+                            nearestZombie = npc
+                        end
+                    end
                 end
             end
         end
@@ -261,6 +302,8 @@ local function tweenTo(targetPos, speed)
     local distance = (hrp.Position - targetPos).Magnitude
     local duration = distance / speed
     
+    enableNoclip()
+    
     local TweenService = game:GetService("TweenService")
     local tween = TweenService:Create(
         hrp,
@@ -269,6 +312,10 @@ local function tweenTo(targetPos, speed)
     )
     
     tween:Play()
+    tween.Completed:Connect(function()
+        disableNoclip()
+    end)
+    
     return tween
 end
 
@@ -403,10 +450,12 @@ local function startAutoMining()
         farmConnection:Disconnect()
     end
     
-    enableNoclip()
-    equipPickaxe()
-    wait(0.3)
+    -- Start tapping first
     startMiningTap()
+    
+    -- Then equip pickaxe
+    task.wait(0.2)
+    equipPickaxe()
     
     farmConnection = RunService.Heartbeat:Connect(function()
         if not autoMining then return end
@@ -436,10 +485,12 @@ local function startAutoKill()
         killConnection:Disconnect()
     end
     
-    enableNoclip()
-    equipWeapon()
-    wait(0.3)
+    -- Start tapping first
     startKillTap()
+    
+    -- Then equip weapon
+    task.wait(0.2)
+    equipWeapon()
     
     killConnection = RunService.Heartbeat:Connect(function()
         if not autoKillZombie then return end
@@ -474,8 +525,6 @@ local function startAutoSell()
     if sellConnection then
         sellConnection:Disconnect()
     end
-    
-    enableNoclip()
     
     sellConnection = RunService.Heartbeat:Connect(function()
         if not autoSell then return end
@@ -517,8 +566,6 @@ local function startAutoForge()
     if forgeConnection then
         forgeConnection:Disconnect()
     end
-    
-    enableNoclip()
     
     forgeConnection = RunService.Heartbeat:Connect(function()
         if not autoForge then return end
@@ -620,12 +667,6 @@ local antiAFKToggle = Tabs.MainTab:Toggle({
 				end
 			end)
 			
-			NatHub:Notify({
-				Title = "Anti AFK Enabled",
-				Content = "You will no longer be kicked for inactivity.",
-				Icon = "shield-check",
-				Duration = 5,
-			})
 		else
 			statusParagraph:SetDesc("Anti AFK is currently disabled.")
 			
@@ -633,13 +674,6 @@ local antiAFKToggle = Tabs.MainTab:Toggle({
 				afkConnection:Disconnect()
 				afkConnection = nil
 			end
-			
-			NatHub:Notify({
-				Title = "Anti AFK Disabled",
-				Content = "Anti AFK protection has been turned off.",
-				Icon = "shield-off",
-				Duration = 5,
-			})
 		end
 	end
 })
@@ -671,19 +705,6 @@ Tabs.MainTab:Button({
 	Callback = function() 
 		if antiAFKEnabled then
 			performAntiAFK()
-			NatHub:Notify({
-				Title = "Manual Action",
-				Content = "Anti AFK action performed manually.",
-				Icon = "mouse-pointer-2",
-				Duration = 3,
-			})
-		else
-			NatHub:Notify({
-				Title = "Error",
-				Content = "Please enable Anti AFK first.",
-				Icon = "alert-circle",
-				Duration = 3,
-			})
 		end
 	end
 })
@@ -704,12 +725,6 @@ Tabs.FarmTab:Dropdown({
     Value = "All",
     Callback = function(value)
         selectedOre = value
-        NatHub:Notify({
-            Title = "Ore Selected",
-            Content = "Now targeting: " .. value,
-            Icon = "target",
-            Duration = 3,
-        })
     end
 })
 
@@ -722,12 +737,6 @@ local miningToggle = Tabs.FarmTab:Toggle({
         
         if state then
             startAutoMining()
-            NatHub:Notify({
-                Title = "Auto Mining Enabled",
-                Content = "Bot will now automatically mine with noclip.",
-                Icon = "pickaxe",
-                Duration = 3,
-            })
         else
             if farmConnection then
                 farmConnection:Disconnect()
@@ -735,12 +744,6 @@ local miningToggle = Tabs.FarmTab:Toggle({
             end
             disableNoclip()
             stopMiningTap()
-            NatHub:Notify({
-                Title = "Auto Mining Disabled",
-                Content = "Auto mining has been stopped.",
-                Icon = "x",
-                Duration = 3,
-            })
         end
     end
 })
@@ -772,12 +775,6 @@ Tabs.FarmTab:Dropdown({
     Value = "All Items",
     Callback = function(value)
         selectedSellItem = value
-        NatHub:Notify({
-            Title = "Sell Item Selected",
-            Content = "Will sell: " .. value,
-            Icon = "shopping-cart",
-            Duration = 3,
-        })
     end
 })
 
@@ -790,24 +787,12 @@ local sellToggle = Tabs.FarmTab:Toggle({
         
         if state then
             startAutoSell()
-            NatHub:Notify({
-                Title = "Auto Sell Enabled",
-                Content = "Bot will now automatically sell items.",
-                Icon = "dollar-sign",
-                Duration = 3,
-            })
         else
             if sellConnection then
                 sellConnection:Disconnect()
                 sellConnection = nil
             end
             disableNoclip()
-            NatHub:Notify({
-                Title = "Auto Sell Disabled",
-                Content = "Auto sell has been stopped.",
-                Icon = "x",
-                Duration = 3,
-            })
         end
     end
 })
@@ -829,19 +814,7 @@ Tabs.FarmTab:Button({
                     runDialogueCommand("Sell")
                 end
             end
-            NatHub:Notify({
-                Title = "Selling Items",
-                Content = "Flying to merchant to sell items.",
-                Icon = "shopping-bag",
-                Duration = 3,
-            })
-        else
-            NatHub:Notify({
-                Title = "No Merchant Found",
-                Content = "No merchant/shop NPC found nearby.",
-                Icon = "alert-circle",
-                Duration = 3,
-            })
+
         end
     end
 })
@@ -864,24 +837,12 @@ local forgeToggle = Tabs.FarmTab:Toggle({
         
         if state then
             startAutoForge()
-            NatHub:Notify({
-                Title = "Auto Forge Enabled",
-                Content = "Bot will now automatically forge items.",
-                Icon = "flame",
-                Duration = 3,
-            })
         else
             if forgeConnection then
                 forgeConnection:Disconnect()
                 forgeConnection = nil
             end
             disableNoclip()
-            NatHub:Notify({
-                Title = "Auto Forge Disabled",
-                Content = "Auto forge has been stopped.",
-                Icon = "x",
-                Duration = 3,
-            })
         end
     end
 })
@@ -892,9 +853,18 @@ Tabs.CombatTab:Section({
 })
 
 Tabs.CombatTab:Paragraph{
-    Title = "Auto Kill Zombie",
-    Desc = "Automatically detect and kill nearby zombies. The bot will fly to zombies and attack them."
+    Title = "Auto Kill NPC",
+    Desc = "Automatically detect and kill nearby NPCs/enemies. Select specific NPC type or kill all."
 }
+
+Tabs.CombatTab:Dropdown({
+    Title = "Select NPC Type",
+    Values = npcNames,
+    Value = "All",
+    Callback = function(value)
+        selectedNPC = value
+    end
+})
 
 local killToggle = Tabs.CombatTab:Toggle({
     Title = "Enable Auto Kill Zombie",
@@ -905,12 +875,6 @@ local killToggle = Tabs.CombatTab:Toggle({
         
         if state then
             startAutoKill()
-            NatHub:Notify({
-                Title = "Auto Kill Enabled",
-                Content = "Bot will now auto kill with weapon and noclip.",
-                Icon = "sword",
-                Duration = 3,
-            })
         else
             if killConnection then
                 killConnection:Disconnect()
@@ -918,12 +882,6 @@ local killToggle = Tabs.CombatTab:Toggle({
             end
             disableNoclip()
             stopKillTap()
-            NatHub:Notify({
-                Title = "Auto Kill Disabled",
-                Content = "Auto kill has been stopped.",
-                Icon = "x",
-                Duration = 3,
-            })
         end
     end
 })
@@ -941,19 +899,7 @@ Tabs.CombatTab:Button({
                     tweenTo(zombieHrp.Position, flySpeed)
                 end
             end
-            NatHub:Notify({
-                Title = "Targeting Zombie",
-                Content = "Flying to nearest zombie.",
-                Icon = "crosshair",
-                Duration = 3,
-            })
-        else
-            NatHub:Notify({
-                Title = "No Zombie Found",
-                Content = "No zombies detected nearby.",
-                Icon = "alert-circle",
-                Duration = 3,
-            })
+
         end
     end
 })
@@ -972,12 +918,6 @@ Tabs.MiscTab:Button({
         actionCount = 0
         itemsSold = 0
         itemsForged = 0
-        NatHub:Notify({
-            Title = "Stats Reset",
-            Content = "All statistics have been reset.",
-            Icon = "refresh-ccw",
-            Duration = 3,
-        })
     end
 })
 
@@ -987,20 +927,7 @@ Tabs.MiscTab:Button({
     Callback = function()
         local equipment = getPlayerEquipment()
         if equipment then
-            NatHub:Notify({
-                Title = "Equipment Info",
-                Content = "Equipment data retrieved successfully.",
-                Icon = "package",
-                Duration = 3,
-            })
             print("Equipment Info:", equipment)
-        else
-            NatHub:Notify({
-                Title = "Error",
-                Content = "Failed to get equipment info.",
-                Icon = "alert-circle",
-                Duration = 3,
-            })
         end
     end
 })
@@ -1012,12 +939,6 @@ Tabs.MiscTab:Button({
         local hrp = getHumanoidRootPart()
         if hrp then
             hrp.CFrame = CFrame.new(0, 50, 0)
-            NatHub:Notify({
-                Title = "Teleported",
-                Content = "Teleported to spawn.",
-                Icon = "home",
-                Duration = 3,
-            })
         end
     end
 })
@@ -1062,26 +983,13 @@ Tabs.InfoTab:Paragraph{
 	Desc = "• ToolService (Tool activation)\n• CharacterService (Equip items)\n• ProximityService (Dialogue, Forge)\n• DialogueService (Run commands)\n• StatusService (Equipment info)\n• All official game services"
 }
 
-Tabs.InfoTab:Button({
-	Title = "Test Notification",
-	Desc = "Click to test notification system",
-	Callback = function() 
-		NatHub:Notify({
-			Title = "Test Notification",
-			Content = "Notification system is working correctly!",
-			Icon = "bell",
-			Duration = 5,
-		})
-	end
+-- Load notification
+NatHub:Notify({
+	Title = "NatHub",
+	Content = "Script loaded successfully!",
+	Icon = "check-circle",
+	Duration = 3,
 })
 
--- Initial notification (commented out to prevent spam)
--- NatHub:Notify({
--- 	Title = "The Forge - Complete Hub",
--- 	Content = "Script loaded successfully!\nAll features ready to use.",
--- 	Icon = "check-circle",
--- 	Duration = 6,
--- })
-
-print("The Forge - Complete Hub script loaded successfully!")
+print("NatHub script loaded successfully!")
 
