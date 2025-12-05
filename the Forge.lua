@@ -194,100 +194,65 @@ local function disableNoclip()
     end
 end
 
--- Ghost Tap - Creates real click on game viewport (not cursor position)
+-- Ghost Tap - Simulates click without affecting actual mouse cursor
 local function ghostTap()
+    -- Method 1: Direct tool remote call (doesn't use cursor)
     pcall(function()
-        local VIM = game:GetService("VirtualInputManager")
-        local Camera = workspace.CurrentCamera
-        local ViewportSize = Camera.ViewportSize
-        
-        -- Random position near center (anti-detection)
-        local offsetX = math.random(-50, 50)
-        local offsetY = math.random(-50, 50)
-        local clickX = (ViewportSize.X / 2) + offsetX
-        local clickY = (ViewportSize.Y / 2) + offsetY
-        
-        -- Ensure within viewport bounds
-        clickX = math.clamp(clickX, 0, ViewportSize.X)
-        clickY = math.clamp(clickY, 0, ViewportSize.Y)
-        
-        -- Send mouse button down
-        VIM:SendMouseButtonEvent(clickX, clickY, 0, true, game, 1)
-        task.wait(0.02)
-        -- Send mouse button up
-        VIM:SendMouseButtonEvent(clickX, clickY, 0, false, game, 1)
+        local tool = getCharacter():FindFirstChildOfClass("Tool")
+        if tool then
+            tool:Activate()
+        end
     end)
 end
 
--- Mobile Touch Simulation - Real touch on viewport
+-- Mobile Touch Simulation (for mobile devices only)
 local function mobileTouch()
     pcall(function()
-        local VIM = game:GetService("VirtualInputManager")
-        local Camera = workspace.CurrentCamera
-        local ViewportSize = Camera.ViewportSize
-        
-        -- Random position near center
-        local offsetX = math.random(-40, 40)
-        local offsetY = math.random(-40, 40)
-        local touchX = (ViewportSize.X / 2) + offsetX
-        local touchY = (ViewportSize.Y / 2) + offsetY
-        
-        -- Ensure within bounds
-        touchX = math.clamp(touchX, 0, ViewportSize.X)
-        touchY = math.clamp(touchY, 0, ViewportSize.Y)
-        
-        -- Touch begin
-        VIM:SendTouchEvent(0, touchX, touchY, true, game, 1)
-        task.wait(0.02)
-        -- Touch end
-        VIM:SendTouchEvent(0, touchX, touchY, false, game, 1)
+        local UserInputService = game:GetService("UserInputService")
+        -- Only use on mobile/touch devices
+        if UserInputService.TouchEnabled then
+            local VIM = game:GetService("VirtualInputManager")
+            local Camera = workspace.CurrentCamera
+            local ViewportSize = Camera.ViewportSize
+            
+            local touchX = ViewportSize.X / 2
+            local touchY = ViewportSize.Y / 2
+            
+            VIM:SendTouchEvent(0, touchX, touchY, true, game, 1)
+            task.wait(0.01)
+            VIM:SendTouchEvent(0, touchX, touchY, false, game, 1)
+        end
     end)
 end
 
--- Tool Activation with Multiple Methods (Real viewport clicks)
+-- Tool Activation (No cursor interference - your mouse stays free!)
 local function activateTool()
     local char = getCharacter()
     if not char then return end
     
     local tool = char:FindFirstChildOfClass("Tool")
+    if not tool then return end
     
-    -- Method 1: Tool service remote
+    -- Method 1: Tool service remote (server-side activation)
     pcall(function()
         Services.Tool.RF.ToolActivated:InvokeServer()
     end)
     
-    -- Method 2: Direct tool activation
-    if tool then
-        pcall(function()
-            tool:Activate()
-        end)
-    end
+    -- Method 2: Direct tool activation (client-side)
+    pcall(function()
+        tool:Activate()
+    end)
     
-    -- Method 3: Ghost tap on viewport (PC) - Real screen click
-    ghostTap()
-    
-    -- Method 4: Mobile touch on viewport - Real touch
+    -- Method 3: For mobile devices only
     mobileTouch()
     
-    -- Method 5: UserInputService simulation (no cursor movement)
+    -- Method 4: Tool remote events (if exists)
     pcall(function()
-        local UIS = game:GetService("UserInputService")
-        local Camera = workspace.CurrentCamera
-        local ViewportSize = Camera.ViewportSize
-        
-        -- Random position for click (doesn't move visible cursor)
-        local clickX = (ViewportSize.X / 2) + math.random(-30, 30)
-        local clickY = (ViewportSize.Y / 2) + math.random(-30, 30)
-        
-        -- Create input object for click without moving cursor
-        local mouseInput = {
-            UserInputType = Enum.UserInputType.MouseButton1,
-            Position = Vector3.new(clickX, clickY, 0)
-        }
-        
-        -- Fire tool remote activation
-        if tool and tool:FindFirstChild("RemoteEvent") then
+        if tool:FindFirstChild("RemoteEvent") then
             tool.RemoteEvent:FireServer()
+        end
+        if tool:FindFirstChild("RemoteFunction") then
+            tool.RemoteFunction:InvokeServer()
         end
     end)
 end
