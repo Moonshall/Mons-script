@@ -226,7 +226,7 @@ local function mobileTouch()
     end)
 end
 
--- Tool Activation (Multiple methods for compatibility)
+-- Tool Activation (No mouse cursor interference)
 local function activateTool()
     local char = getCharacter()
     if not char then return end
@@ -244,49 +244,94 @@ local function activateTool()
         tool:Activate()
     end)
     
-    -- Method 3: VirtualInputManager with visible cursor spawn
+    -- Method 3: Tool's RemoteEvent/BindableEvent (if exists)
     pcall(function()
-        local VIM = game:GetService("VirtualInputManager")
-        local Camera = workspace.CurrentCamera
-        local ViewportSize = Camera.ViewportSize
-        local Mouse = LocalPlayer:GetMouse()
+        -- Check for Activated event
+        if tool:FindFirstChild("Activated") then
+            tool.Activated:Fire()
+        end
         
-        -- Get target position on screen
-        local clickX, clickY
+        -- Check for RemoteEvent in tool descendants
+        for _, child in pairs(tool:GetDescendants()) do
+            if child:IsA("RemoteEvent") and (child.Name:lower():find("activate") or child.Name:lower():find("swing") or child.Name:lower():find("use")) then
+                child:FireServer()
+            end
+        end
         
-        -- Try to get ore/npc position on screen for mining/kill
+        -- Check for BindableEvent
+        for _, child in pairs(tool:GetDescendants()) do
+            if child:IsA("BindableEvent") and (child.Name:lower():find("activate") or child.Name:lower():find("swing")) then
+                child:Fire()
+            end
+        end
+    end)
+    
+    -- Method 4: ContextActionService (doesn't use mouse)
+    pcall(function()
+        local ContextActionService = game:GetService("ContextActionService")
+        ContextActionService:BindAction("AutoTap", function()
+            tool:Activate()
+        end, false, Enum.KeyCode.Unknown)
+        ContextActionService:UnbindAction("AutoTap")
+    end)
+    
+    -- Method 5: Tool Handle manipulation (simulates swing)
+    pcall(function()
+        local handle = tool:FindFirstChild("Handle")
+        if handle and handle:IsA("BasePart") then
+            local originalCF = handle.CFrame
+            handle.CFrame = handle.CFrame * CFrame.Angles(math.rad(45), 0, 0)
+            task.wait(0.05)
+            handle.CFrame = originalCF
+        end
+    end)
+    
+    -- Method 6: Humanoid LoadAnimation (if tool has animation)
+    pcall(function()
+        local humanoid = getHumanoid()
+        if humanoid then
+            for _, child in pairs(tool:GetDescendants()) do
+                if child:IsA("Animation") then
+                    local track = humanoid:LoadAnimation(child)
+                    track:Play()
+                end
+            end
+        end
+    end)
+    
+    -- Method 7: ReplicatedStorage tool remotes
+    pcall(function()
+        local remoteNames = {"ToolActivated", "Swing", "Attack", "Use", "Mine", "Hit"}
+        for _, remoteName in pairs(remoteNames) do
+            local remote = ReplicatedStorage:FindFirstChild(remoteName, true)
+            if remote then
+                if remote:IsA("RemoteEvent") then
+                    remote:FireServer(tool)
+                elseif remote:IsA("RemoteFunction") then
+                    remote:InvokeServer(tool)
+                end
+            end
+        end
+    end)
+    
+    -- Method 8: Game-specific tool activation with params
+    pcall(function()
+        if Services.Tool.RF.ToolActivated then
+            Services.Tool.RF.ToolActivated:InvokeServer(tool, tool.Name)
+        end
+        if Services.Tool.RE and Services.Tool.RE.ToolActivated then
+            Services.Tool.RE.ToolActivated:FireServer(tool, tool.Name)
+        end
+    end)
+    
+    -- Method 9: Proximity-based activation for mining
+    pcall(function()
         if autoMining then
             local ore = findNearestOre()
-            if ore then
-                local screenPos, onScreen = Camera:WorldToScreenPoint(ore.Position)
-                if onScreen then
-                    clickX = screenPos.X
-                    clickY = screenPos.Y
-                end
-            end
-        elseif autoKillZombie and currentTarget then
-            local targetPos = currentTarget:FindFirstChild("HumanoidRootPart")
-            if targetPos then
-                local screenPos, onScreen = Camera:WorldToScreenPoint(targetPos.Position)
-                if onScreen then
-                    clickX = screenPos.X
-                    clickY = screenPos.Y
-                end
+            if ore and ore.Parent then
+                Services.Proximity.RF.Forge:InvokeServer(ore.Parent, tool)
             end
         end
-        
-        -- Fallback to center if no target found
-        if not clickX then
-            clickX = ViewportSize.X / 2
-            clickY = ViewportSize.Y / 2
-        end
-        
-        -- Spawn cursor at position and click
-        VIM:SendMouseMoveEvent(clickX, clickY, game)
-        task.wait(0.005)
-        VIM:SendMouseButtonEvent(clickX, clickY, 0, true, game, 0)
-        task.wait(0.01)
-        VIM:SendMouseButtonEvent(clickX, clickY, 0, false, game, 0)
     end)
     
     -- Method 4: Mobile touch simulation
