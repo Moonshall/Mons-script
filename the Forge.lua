@@ -73,9 +73,9 @@ local autoForge = false
 local selectedOre = "Stone"
 local selectedNPC = "Zombie"
 local selectedSellCategory = "All Items"
-local flySpeed = 35 -- Reduced speed to avoid anti-cheat (was 50)
+local flySpeed = 30 -- Reduced speed to avoid anti-cheat
 local miningRange = 20
-local undergroundDistance = -50 -- Distance below ground for mining (negative Y position)
+local undergroundDistance = -5 -- Distance below ground for mining (negative Y position)
 local farmConnection = nil
 local killConnection = nil
 local sellConnection = nil
@@ -884,7 +884,7 @@ Tabs.FarmTab:Slider({
 	Value = {
 		Min = -200,
 		Max = 0,
-		Default = -50,
+		Default = -5,
 	},
 	Callback = function(value)
 		undergroundDistance = value
