@@ -72,7 +72,7 @@ local itemsSold = 0
 local itemsForged = 0
 
 -- Ore Names List
-local oreNames = {"All", "Emberstone", "Frost Ore", "Ironcore", "Shadow Shard", "Glimmer Crystal", 
+local oreNames = {"All","Stone", "Emberstone", "Frost Ore", "Ironcore", "Shadow Shard", "Glimmer Crystal", 
                   "Nova Ore", "Titan Rock", "Luminite", "Darksteel Chunk", "Magma Fragment",
                   "Storm Quartz", "Ancient Relic Stone", "Void Ore", "Copperlite", "Starfall Gem",
                   "Dragonstone", "Rune Ore", "Crystaline Rock", "Obsidian Core", "Radiant Gem"}
@@ -165,11 +165,10 @@ local function startMiningTap()
     if miningTapConnection then
         miningTapConnection:Disconnect()
     end
-    miningTapConnection = RunService.RenderStepped:Connect(function()
+    miningTapConnection = RunService.Heartbeat:Connect(function()
         if autoMining then
-            pcall(function()
-                activateTool()
-            end)
+            activateTool()
+            task.wait(0.05) -- Small delay between taps
         end
     end)
 end
@@ -186,11 +185,10 @@ local function startKillTap()
     if killTapConnection then
         killTapConnection:Disconnect()
     end
-    killTapConnection = RunService.RenderStepped:Connect(function()
+    killTapConnection = RunService.Heartbeat:Connect(function()
         if autoKillZombie then
-            pcall(function()
-                activateTool()
-            end)
+            activateTool()
+            task.wait(0.05) -- Small delay between taps
         end
     end)
 end
@@ -321,7 +319,30 @@ end
 
 local function activateTool()
     pcall(function()
+        -- Method 1: Direct tool activation
         Services.Tool.RF.ToolActivated:InvokeServer()
+    end)
+    
+    pcall(function()
+        -- Method 2: Character tool activation
+        local char = getCharacter()
+        if char then
+            local tool = char:FindFirstChildOfClass("Tool")
+            if tool then
+                tool:Activate()
+            end
+        end
+    end)
+    
+    pcall(function()
+        -- Method 3: Mouse click simulation
+        local player = game:GetService("Players").LocalPlayer
+        if player then
+            local mouse = player:GetMouse()
+            if mouse then
+                mouse1click()
+            end
+        end
     end)
 end
 
