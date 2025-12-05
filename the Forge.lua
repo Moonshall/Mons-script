@@ -54,6 +54,8 @@ local autoMining = false
 local autoKillZombie = false
 local autoSell = false
 local autoForge = false
+local selectedOre = "All"
+local selectedSellItem = "All Items"
 local flySpeed = 50
 local miningRange = 20
 local farmConnection = nil
@@ -61,11 +63,23 @@ local killConnection = nil
 local sellConnection = nil
 local forgeConnection = nil
 local noclipConnection = nil
-local tapConnection = nil
+local miningTapConnection = nil
+local killTapConnection = nil
 local statsCollected = 0
 local zombiesKilled = 0
 local itemsSold = 0
 local itemsForged = 0
+
+-- Ore Names List
+local oreNames = {"All", "Emberstone", "Frost Ore", "Ironcore", "Shadow Shard", "Glimmer Crystal", 
+                  "Nova Ore", "Titan Rock", "Luminite", "Darksteel Chunk", "Magma Fragment",
+                  "Storm Quartz", "Ancient Relic Stone", "Void Ore", "Copperlite", "Starfall Gem",
+                  "Dragonstone", "Rune Ore", "Crystaline Rock", "Obsidian Core", "Radiant Gem"}
+
+-- Item Names for Selling
+local sellItemNames = {"All Items", "Iron Shard", "Crystal Powder", "Forge Catalyst", "Binding Alloy",
+                        "Mystic Shard", "Dust Core", "Hardened Metal Plate", "Runic Essence",
+                        "Ember Dust", "Luminite Powder"}
 
 -- Anti AFK Function
 local function performAntiAFK()
@@ -135,19 +149,37 @@ local function disableNoclip()
     end
 end
 
--- Auto Tap Function
-local function startAutoTap()
-    if tapConnection then return end
-    tapConnection = RunService.Heartbeat:Connect(function()
-        activateTool()
-        wait(0.1)
+-- Auto Tap Functions for Mining
+local function startMiningTap()
+    if miningTapConnection then return end
+    miningTapConnection = RunService.Heartbeat:Connect(function()
+        if autoMining then
+            activateTool()
+        end
     end)
 end
 
-local function stopAutoTap()
-    if tapConnection then
-        tapConnection:Disconnect()
-        tapConnection = nil
+local function stopMiningTap()
+    if miningTapConnection then
+        miningTapConnection:Disconnect()
+        miningTapConnection = nil
+    end
+end
+
+-- Auto Tap Functions for Killing
+local function startKillTap()
+    if killTapConnection then return end
+    killTapConnection = RunService.Heartbeat:Connect(function()
+        if autoKillZombie then
+            activateTool()
+        end
+    end)
+end
+
+local function stopKillTap()
+    if killTapConnection then
+        killTapConnection:Disconnect()
+        killTapConnection = nil
     end
 end
 
@@ -159,13 +191,37 @@ local function findNearestOre()
     local nearestDistance = math.huge
     
     for _, obj in pairs(workspace:GetDescendants()) do
-        if obj:IsA("Model") and (obj.Name:lower():find("ore") or obj.Name:lower():find("rock") or obj.Name:lower():find("stone")) then
-            local orePart = obj:FindFirstChild("Part") or obj:FindFirstChildWhichIsA("BasePart")
-            if orePart then
-                local distance = (hrp.Position - orePart.Position).Magnitude
-                if distance < nearestDistance and distance < 500 then
-                    nearestDistance = distance
-                    nearestOre = orePart
+        if obj:IsA("Model") then
+            local isOre = false
+            
+            -- Check if it's an ore
+            if obj.Name:lower():find("ore") or obj.Name:lower():find("rock") or obj.Name:lower():find("stone") then
+                isOre = true
+            else
+                -- Check against ore names list
+                for _, oreName in pairs(oreNames) do
+                    if obj.Name:find(oreName) then
+                        isOre = true
+                        break
+                    end
+                end
+            end
+            
+            if isOre then
+                -- Filter by selected ore type
+                if selectedOre ~= "All" and not obj.Name:find(selectedOre) then
+                    isOre = false
+                end
+                
+                if isOre then
+                    local orePart = obj:FindFirstChild("Part") or obj:FindFirstChildWhichIsA("BasePart")
+                    if orePart then
+                        local distance = (hrp.Position - orePart.Position).Magnitude
+                        if distance < nearestDistance and distance < 500 then
+                            nearestDistance = distance
+                            nearestOre = orePart
+                        end
+                    end
                 end
             end
         end
@@ -313,14 +369,26 @@ local function findNearestForgeStation()
     local nearestForge = nil
     local nearestDistance = math.huge
     
+    -- Check workspace for forge stations
     for _, obj in pairs(workspace:GetDescendants()) do
-        if obj:IsA("Model") and (obj.Name:lower():find("forge") or obj.Name:lower():find("anvil") or obj.Name:lower():find("craft")) then
-            local forgePart = obj:FindFirstChild("Part") or obj:FindFirstChildWhichIsA("BasePart")
-            if forgePart then
-                local distance = (hrp.Position - forgePart.Position).Magnitude
-                if distance < nearestDistance and distance < 1000 then
-                    nearestDistance = distance
-                    nearestForge = obj
+        if obj:IsA("Model") or obj:IsA("Part") then
+            local isForge = false
+            
+            -- Check common forge names
+            if obj.Name:lower():find("forge") or obj.Name:lower():find("anvil") or 
+               obj.Name:lower():find("craft") or obj.Name:lower():find("furnace") or
+               obj.Name:lower():find("smithing") or obj.Name:lower():find("workbench") then
+                isForge = true
+            end
+            
+            if isForge then
+                local forgePart = obj:IsA("Part") and obj or obj:FindFirstChild("Part") or obj:FindFirstChildWhichIsA("BasePart")
+                if forgePart then
+                    local distance = (hrp.Position - forgePart.Position).Magnitude
+                    if distance < nearestDistance and distance < 1000 then
+                        nearestDistance = distance
+                        nearestForge = obj
+                    end
                 end
             end
         end
@@ -337,7 +405,8 @@ local function startAutoMining()
     
     enableNoclip()
     equipPickaxe()
-    startAutoTap()
+    wait(0.3)
+    startMiningTap()
     
     farmConnection = RunService.Heartbeat:Connect(function()
         if not autoMining then return end
@@ -369,7 +438,8 @@ local function startAutoKill()
     
     enableNoclip()
     equipWeapon()
-    startAutoTap()
+    wait(0.3)
+    startKillTap()
     
     killConnection = RunService.Heartbeat:Connect(function()
         if not autoKillZombie then return end
@@ -423,7 +493,15 @@ local function startAutoSell()
                 else
                     openDialogue(npc)
                     wait(0.5)
-                    runDialogueCommand("Sell")
+                    
+                    -- Sell specific item or all
+                    if selectedSellItem == "All Items" then
+                        runDialogueCommand("Sell All")
+                        runDialogueCommand("Sell")
+                    else
+                        runDialogueCommand("Sell " .. selectedSellItem)
+                    end
+                    
                     itemsSold = itemsSold + 1
                     wait(2)
                 end
@@ -448,23 +526,48 @@ local function startAutoForge()
         local forgeStation = findNearestForgeStation()
         if forgeStation then
             local hrp = getHumanoidRootPart()
-            local forgePart = forgeStation:FindFirstChild("Part") or forgeStation:FindFirstChildWhichIsA("BasePart")
+            local forgePart = forgeStation
+            
+            -- Get the proper part if it's a model
+            if forgeStation:IsA("Model") then
+                forgePart = forgeStation:FindFirstChild("Part") or forgeStation:FindFirstChildWhichIsA("BasePart")
+            end
             
             if hrp and forgePart then
                 local distance = (hrp.Position - forgePart.Position).Magnitude
                 
-                if distance > 10 then
-                    tweenTo(forgePart.Position + Vector3.new(0, 3, 0), flySpeed)
+                if distance > 15 then
+                    tweenTo(forgePart.Position + Vector3.new(0, 5, 0), flySpeed)
                 else
-                    forge(forgeStation)
-                    openDialogue(forgeStation)
+                    -- Try multiple forge methods
+                    pcall(function()
+                        -- Method 1: Direct forge call
+                        Services.Proximity.RF.Forge:InvokeServer(forgeStation)
+                    end)
+                    
+                    wait(0.3)
+                    
+                    pcall(function()
+                        -- Method 2: Dialogue-based forge
+                        Services.Proximity.RF.Dialogue:InvokeServer(forgeStation)
+                    end)
+                    
                     wait(0.5)
-                    runDialogueCommand("Craft")
-                    runDialogueCommand("Forge")
+                    
+                    pcall(function()
+                        -- Method 3: Run forge commands
+                        Services.Dialogue.RF.RunCommand:InvokeServer("Forge")
+                        Services.Dialogue.RF.RunCommand:InvokeServer("Craft")
+                        Services.Dialogue.RF.RunCommand:InvokeServer("Create")
+                    end)
+                    
                     itemsForged = itemsForged + 1
-                    wait(2)
+                    wait(3)
                 end
             end
+        else
+            -- Debug: No forge station found
+            print("No forge station found nearby")
         end
         
         wait(1)
@@ -592,8 +695,23 @@ Tabs.FarmTab:Section({
 
 Tabs.FarmTab:Paragraph{
     Title = "Auto Mining",
-    Desc = "Automatically fly to ores and mine them. The script will detect nearby ores and farm them automatically."
+    Desc = "Automatically fly to ores and mine them. Select specific ore type or mine all ores."
 }
+
+Tabs.FarmTab:Dropdown({
+    Title = "Select Ore Type",
+    Values = oreNames,
+    Value = "All",
+    Callback = function(value)
+        selectedOre = value
+        NatHub:Notify({
+            Title = "Ore Selected",
+            Content = "Now targeting: " .. value,
+            Icon = "target",
+            Duration = 3,
+        })
+    end
+})
 
 local miningToggle = Tabs.FarmTab:Toggle({
     Title = "Enable Auto Mining",
@@ -616,7 +734,7 @@ local miningToggle = Tabs.FarmTab:Toggle({
                 farmConnection = nil
             end
             disableNoclip()
-            stopAutoTap()
+            stopMiningTap()
             NatHub:Notify({
                 Title = "Auto Mining Disabled",
                 Content = "Auto mining has been stopped.",
@@ -645,8 +763,23 @@ Tabs.FarmTab:Section({
 
 Tabs.FarmTab:Paragraph{
     Title = "Auto Sell Items",
-    Desc = "Automatically fly to merchant/shop NPC and sell your items."
+    Desc = "Automatically fly to merchant/shop NPC and sell your items. Select specific item or sell all."
 }
+
+Tabs.FarmTab:Dropdown({
+    Title = "Select Item to Sell",
+    Values = sellItemNames,
+    Value = "All Items",
+    Callback = function(value)
+        selectedSellItem = value
+        NatHub:Notify({
+            Title = "Sell Item Selected",
+            Content = "Will sell: " .. value,
+            Icon = "shopping-cart",
+            Duration = 3,
+        })
+    end
+})
 
 local sellToggle = Tabs.FarmTab:Toggle({
     Title = "Enable Auto Sell",
@@ -784,7 +917,7 @@ local killToggle = Tabs.CombatTab:Toggle({
                 killConnection = nil
             end
             disableNoclip()
-            stopAutoTap()
+            stopKillTap()
             NatHub:Notify({
                 Title = "Auto Kill Disabled",
                 Content = "Auto kill has been stopped.",
