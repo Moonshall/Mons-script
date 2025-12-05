@@ -19,54 +19,33 @@ local Services = {
     Tool = ReplicatedStorage.Shared.Packages.Knit.Services.ToolService,
 }
 
--- Load Orion UI Library
-local OrionLib = loadstring(game:HttpGet(('https://raw.githubusercontent.com/shlexware/Orion/main/source')))()
+-- Load Kavo UI Library (Most Stable)
+local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/xHeptc/Kavo-UI-Library/main/source.lua"))()
 
-local Window = OrionLib:MakeWindow({
-    Name = "The Forge - Auto Farm Script",
-    HidePremium = false,
-    SaveConfig = true,
-    ConfigFolder = "TheForgeConfig",
-    IntroEnabled = false
+local Window = Library.CreateLib("The Forge - Auto Farm Script", "DarkTheme")
+
+-- Notification
+game:GetService("StarterGui"):SetCore("SendNotification", {
+	Title = "The Forge Script";
+	Text = "Script loaded successfully!";
+	Duration = 5;
 })
 
-OrionLib:MakeNotification({
-	Name = "The Forge Script",
-	Content = "Script loaded successfully!",
-	Image = "rbxassetid://4483345998",
-	Time = 5
-})
+-- Create Tabs (Kavo format)
+local MainTab = Window:NewTab("Anti AFK")
+local MainSection = MainTab:NewSection("Anti AFK Controls")
 
--- Create Tabs
-local MainTab = Window:MakeTab({
-	Name = "Anti AFK",
-	Icon = "rbxassetid://4483345998",
-	PremiumOnly = false
-})
+local FarmTab = Window:NewTab("Auto Farm")
+local FarmSection = FarmTab:NewSection("Farming Controls")
 
-local FarmTab = Window:MakeTab({
-	Name = "Auto Farm",
-	Icon = "rbxassetid://4483345998",
-	PremiumOnly = false
-})
+local CombatTab = Window:NewTab("Combat")
+local CombatSection = CombatTab:NewSection("Combat Controls")
 
-local CombatTab = Window:MakeTab({
-	Name = "Combat",
-	Icon = "rbxassetid://4483345998",
-	PremiumOnly = false
-})
+local MiscTab = Window:NewTab("Misc")
+local MiscSection = MiscTab:NewSection("Miscellaneous")
 
-local MiscTab = Window:MakeTab({
-	Name = "Misc",
-	Icon = "rbxassetid://4483345998",
-	PremiumOnly = false
-})
-
-local InfoTab = Window:MakeTab({
-	Name = "Info",
-	Icon = "rbxassetid://4483345998",
-	PremiumOnly = false
-})
+local InfoTab = Window:NewTab("Info")
+local InfoSection = InfoTab:NewSection("Information")
 
 -- Anti AFK Variables
 local antiAFKEnabled = false
@@ -542,174 +521,129 @@ end
 -- UI ELEMENTS
 
 -- Main Tab
-MainTab:AddSection({Name = "Anti AFK Status"})
+MainSection:NewLabel("Prevents AFK kick after 20 minutes")
 
-MainTab:AddParagraph("About", "Prevents Roblox from kicking you after 20 minutes of inactivity.")
-
-MainTab:AddToggle({
-	Name = "Enable Anti AFK",
-	Default = false,
-	Callback = function(state)
-		antiAFKEnabled = state
+MainSection:NewToggle("Enable Anti AFK", "Auto bypass AFK detection", function(state)
+	antiAFKEnabled = state
+	
+	if state then
+		if afkConnection then
+			afkConnection:Disconnect()
+		end
 		
-		if state then
-			if afkConnection then
-				afkConnection:Disconnect()
+		afkConnection = RunService.Heartbeat:Connect(function()
+			if tick() - lastAction >= 60 then
+				performAntiAFK()
 			end
-			
-			afkConnection = RunService.Heartbeat:Connect(function()
-				if tick() - lastAction >= 60 then
-					performAntiAFK()
-				end
-			end)
-			
-			LocalPlayer.Idled:connect(function()
-				if antiAFKEnabled then
-					VirtualUser:CaptureController()
-					VirtualUser:ClickButton2(Vector2.new())
-				end
-			end)
-		else
-			if afkConnection then
-				afkConnection:Disconnect()
-				afkConnection = nil
-			end
-		end
-	end
-})
-
-MainTab:AddButton({
-	Name = "Perform Manual Action",
-	Callback = function()
-		if antiAFKEnabled then
-			performAntiAFK()
-		end
-	end
-})
-
--- Farm Tab
-FarmTab:AddSection({Name = "Auto Mining"})
-
-FarmTab:AddParagraph("Auto Mining", "Automatically fly to ores and mine them.")
-
-FarmTab:AddDropdown({
-	Name = "Select Ore Type",
-	Default = "All",
-	Options = oreNames,
-	Callback = function(value)
-		selectedOre = value
-	end
-})
-
-FarmTab:AddToggle({
-	Name = "Enable Auto Mining",
-	Default = false,
-	Callback = function(state)
-		autoMining = state
+		end)
 		
-		if state then
-			startAutoMining()
-		else
-			if farmConnection then
-				farmConnection:Disconnect()
-				farmConnection = nil
+		LocalPlayer.Idled:connect(function()
+			if antiAFKEnabled then
+				VirtualUser:CaptureController()
+				VirtualUser:ClickButton2(Vector2.new())
 			end
-			disableNoclip()
-			stopMiningTap()
+		end)
+	else
+		if afkConnection then
+			afkConnection:Disconnect()
+			afkConnection = nil
 		end
-	end
-})
-
-FarmTab:AddSlider({
-	Name = "Mining Range",
-	Min = 5,
-	Max = 50,
-	Default = 20,
-	Color = Color3.fromRGB(255,255,255),
-	Increment = 1,
-	ValueName = "studs",
-	Callback = function(value)
-		miningRange = value
-	end
-})
-
--- Combat Tab
-CombatTab:AddSection({Name = "Auto Kill"})
-
-CombatTab:AddParagraph("Auto Kill", "Automatically detect and kill nearby NPCs/enemies.")
-
-CombatTab:AddDropdown({
-	Name = "Select NPC Type",
-	Default = "All",
-	Options = npcNames,
-	Callback = function(value)
-		selectedNPC = value
-	end
-})
-
-CombatTab:AddToggle({
-	Name = "Enable Auto Kill",
-	Default = false,
-	Callback = function(state)
-		autoKillZombie = state
-		
-		if state then
-			startAutoKill()
-		else
-			if killConnection then
-				killConnection:Disconnect()
-				killConnection = nil
-			end
-			disableNoclip()
-			stopKillTap()
-			currentTarget = nil
-		end
-	end
-})
-
--- Misc Tab
-MiscTab:AddSection({Name = "Player Settings"})
-
-MiscTab:AddButton({
-	Name = "Reset Stats",
-	Callback = function()
-		statsCollected = 0
-		zombiesKilled = 0
-		actionCount = 0
-		itemsSold = 0
-		itemsForged = 0
-		OrionLib:MakeNotification({
-			Name = "Stats Reset",
-			Content = "All statistics have been reset!",
-			Image = "rbxassetid://4483345998",
-			Time = 3
-		})
-	end
-})
-
-MiscTab:AddButton({
-	Name = "Teleport to Spawn",
-	Callback = function()
-		local hrp = getHumanoidRootPart()
-		if hrp then
-			hrp.CFrame = CFrame.new(0, 50, 0)
-		end
-	end
-})
-
--- Info Tab
-InfoTab:AddSection({Name = "Script Information"})
-
-InfoTab:AddParagraph("The Forge Script v2.1", "All-in-one script with Anti AFK, Auto Mining, and Auto Kill features.")
-
-InfoTab:AddParagraph("Features", "• Anti AFK\n• Auto Mining\n• Auto Kill NPC\n• Noclip during farming\n• Auto-tap system\n• Session statistics")
-
-InfoTab:AddLabel("Session Stats:")
-
-spawn(function()
-	while wait(5) do
-		InfoTab:AddLabel("Actions: "..actionCount.." | Ores: "..statsCollected.." | Kills: "..zombiesKilled)
 	end
 end)
 
-OrionLib:Init()
+MainSection:NewButton("Manual AFK Action", "Trigger anti-AFK manually", function()
+	if antiAFKEnabled then
+		performAntiAFK()
+	end
+end)
+
+-- Farm Tab
+FarmSection:NewLabel("Automatically fly to ores and mine them")
+
+FarmSection:NewDropdown("Select Ore Type", "Choose specific ore", oreNames, function(value)
+	selectedOre = value
+end)
+
+FarmSection:NewToggle("Enable Auto Mining", "Start auto mining", function(state)
+	autoMining = state
+	
+	if state then
+		startAutoMining()
+	else
+		if farmConnection then
+			farmConnection:Disconnect()
+			farmConnection = nil
+		end
+		disableNoclip()
+		stopMiningTap()
+	end
+end)
+
+FarmSection:NewSlider("Mining Range", "Distance to mine", 50, 5, function(value)
+	miningRange = value
+end)
+
+-- Combat Tab
+CombatSection:NewLabel("Automatically detect and kill NPCs/enemies")
+
+CombatSection:NewDropdown("Select NPC Type", "Choose enemy type", npcNames, function(value)
+	selectedNPC = value
+end)
+
+CombatSection:NewToggle("Enable Auto Kill", "Start auto kill", function(state)
+	autoKillZombie = state
+	
+	if state then
+		startAutoKill()
+	else
+		if killConnection then
+			killConnection:Disconnect()
+			killConnection = nil
+		end
+		disableNoclip()
+		stopKillTap()
+		currentTarget = nil
+	end
+end)
+
+-- Misc Tab
+MiscSection:NewButton("Reset Stats", "Reset all statistics", function()
+	statsCollected = 0
+	zombiesKilled = 0
+	actionCount = 0
+	itemsSold = 0
+	itemsForged = 0
+	game:GetService("StarterGui"):SetCore("SendNotification", {
+		Title = "Stats Reset";
+		Text = "All statistics have been reset!";
+		Duration = 3;
+	})
+end)
+
+MiscSection:NewButton("Teleport to Spawn", "TP to spawn point", function()
+	local hrp = getHumanoidRootPart()
+	if hrp then
+		hrp.CFrame = CFrame.new(0, 50, 0)
+	end
+end)
+
+-- Info Tab
+InfoSection:NewLabel("The Forge Script v2.1")
+InfoSection:NewLabel("All-in-one farming script")
+InfoSection:NewLabel("")
+InfoSection:NewLabel("Features:")
+InfoSection:NewLabel("• Anti AFK bypass")
+InfoSection:NewLabel("• Auto Mining with ore selection")
+InfoSection:NewLabel("• Auto Kill with NPC selection")
+InfoSection:NewLabel("• Noclip during farming")
+InfoSection:NewLabel("• Auto-tap system (4 methods)")
+InfoSection:NewLabel("• Session statistics tracking")
+InfoSection:NewLabel("")
+InfoSection:NewLabel("Session Stats:")
+
+spawn(function()
+	while wait(5) do
+		-- Update stats in console
+		print("Stats - Actions: "..actionCount.." | Ores: "..statsCollected.." | Kills: "..zombiesKilled)
+	end
+end)
