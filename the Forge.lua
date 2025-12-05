@@ -194,42 +194,57 @@ local function disableNoclip()
     end
 end
 
--- Ghost Tap - Creates invisible click at screen center
+-- Ghost Tap - Creates real click on game viewport (not cursor position)
 local function ghostTap()
     pcall(function()
         local VIM = game:GetService("VirtualInputManager")
         local Camera = workspace.CurrentCamera
         local ViewportSize = Camera.ViewportSize
         
-        -- Center of screen
-        local centerX = ViewportSize.X / 2
-        local centerY = ViewportSize.Y / 2
+        -- Random position near center (anti-detection)
+        local offsetX = math.random(-50, 50)
+        local offsetY = math.random(-50, 50)
+        local clickX = (ViewportSize.X / 2) + offsetX
+        local clickY = (ViewportSize.Y / 2) + offsetY
         
-        -- Send click at center
-        VIM:SendMouseButtonEvent(centerX, centerY, 0, true, game, 0)
-        task.wait(0.01)
-        VIM:SendMouseButtonEvent(centerX, centerY, 0, false, game, 0)
+        -- Ensure within viewport bounds
+        clickX = math.clamp(clickX, 0, ViewportSize.X)
+        clickY = math.clamp(clickY, 0, ViewportSize.Y)
+        
+        -- Send mouse button down
+        VIM:SendMouseButtonEvent(clickX, clickY, 0, true, game, 1)
+        task.wait(0.02)
+        -- Send mouse button up
+        VIM:SendMouseButtonEvent(clickX, clickY, 0, false, game, 1)
     end)
 end
 
--- Mobile Touch Simulation
+-- Mobile Touch Simulation - Real touch on viewport
 local function mobileTouch()
     pcall(function()
         local VIM = game:GetService("VirtualInputManager")
         local Camera = workspace.CurrentCamera
         local ViewportSize = Camera.ViewportSize
         
-        local centerX = ViewportSize.X / 2
-        local centerY = ViewportSize.Y / 2
+        -- Random position near center
+        local offsetX = math.random(-40, 40)
+        local offsetY = math.random(-40, 40)
+        local touchX = (ViewportSize.X / 2) + offsetX
+        local touchY = (ViewportSize.Y / 2) + offsetY
         
-        -- Simulate touch
-        VIM:SendTouchEvent(0, centerX, centerY, true, game, 0)
-        task.wait(0.01)
-        VIM:SendTouchEvent(0, centerX, centerY, false, game, 0)
+        -- Ensure within bounds
+        touchX = math.clamp(touchX, 0, ViewportSize.X)
+        touchY = math.clamp(touchY, 0, ViewportSize.Y)
+        
+        -- Touch begin
+        VIM:SendTouchEvent(0, touchX, touchY, true, game, 1)
+        task.wait(0.02)
+        -- Touch end
+        VIM:SendTouchEvent(0, touchX, touchY, false, game, 1)
     end)
 end
 
--- Tool Activation with Multiple Methods
+-- Tool Activation with Multiple Methods (Real viewport clicks)
 local function activateTool()
     local char = getCharacter()
     if not char then return end
@@ -248,15 +263,32 @@ local function activateTool()
         end)
     end
     
-    -- Method 3: Ghost tap at screen center (PC)
+    -- Method 3: Ghost tap on viewport (PC) - Real screen click
     ghostTap()
     
-    -- Method 4: Mobile touch simulation
+    -- Method 4: Mobile touch on viewport - Real touch
     mobileTouch()
     
-    -- Method 5: Legacy mouse simulation
+    -- Method 5: UserInputService simulation (no cursor movement)
     pcall(function()
-        mouse1click()
+        local UIS = game:GetService("UserInputService")
+        local Camera = workspace.CurrentCamera
+        local ViewportSize = Camera.ViewportSize
+        
+        -- Random position for click (doesn't move visible cursor)
+        local clickX = (ViewportSize.X / 2) + math.random(-30, 30)
+        local clickY = (ViewportSize.Y / 2) + math.random(-30, 30)
+        
+        -- Create input object for click without moving cursor
+        local mouseInput = {
+            UserInputType = Enum.UserInputType.MouseButton1,
+            Position = Vector3.new(clickX, clickY, 0)
+        }
+        
+        -- Fire tool remote activation
+        if tool and tool:FindFirstChild("RemoteEvent") then
+            tool.RemoteEvent:FireServer()
+        end
     end)
 end
 
@@ -440,28 +472,42 @@ local function findNearestSellNPC()
     local nearestNPC = nil
     local nearestDistance = math.huge
     
-    -- NPC names from list
-    local npcNames = {"Brakk", "Lira", "Oskar", "Tolin", "Mira", "Kaen", "Sela", "Drax", "Fynn", "Valeen", 
-                      "Rudo", "Elwyn", "Jarrick", "Nora", "Taro", "Garm", "Vella", "Kard", "Myra", "Thorne",
-                      "Merchant", "Shop", "Trader", "Vendor"}
-    
+    -- Prioritize Marbles as sell NPC
     for _, npc in pairs(workspace:GetDescendants()) do
-        if npc:IsA("Model") then
-            local found = false
-            for _, name in pairs(npcNames) do
-                if npc.Name:lower():find(name:lower()) then
-                    found = true
-                    break
+        if npc:IsA("Model") and npc.Name == "Marbles" then
+            local npcHrp = npc:FindFirstChild("HumanoidRootPart") or npc:FindFirstChildWhichIsA("BasePart")
+            if npcHrp then
+                local distance = (hrp.Position - npcHrp.Position).Magnitude
+                if distance < nearestDistance and distance < 1000 then
+                    nearestDistance = distance
+                    nearestNPC = npc
                 end
             end
-            
-            if found then
-                local npcHrp = npc:FindFirstChild("HumanoidRootPart") or npc:FindFirstChildWhichIsA("BasePart")
-                if npcHrp then
-                    local distance = (hrp.Position - npcHrp.Position).Magnitude
-                    if distance < nearestDistance and distance < 1000 then
-                        nearestDistance = distance
-                        nearestNPC = npc
+        end
+    end
+    
+    -- Fallback to other merchant NPCs if Marbles not found
+    if not nearestNPC then
+        local npcNames = {"Merchant", "Shop", "Trader", "Vendor", "Brakk", "Lira", "Oskar", "Tolin"}
+        
+        for _, npc in pairs(workspace:GetDescendants()) do
+            if npc:IsA("Model") then
+                local found = false
+                for _, name in pairs(npcNames) do
+                    if npc.Name:lower():find(name:lower()) then
+                        found = true
+                        break
+                    end
+                end
+                
+                if found then
+                    local npcHrp = npc:FindFirstChild("HumanoidRootPart") or npc:FindFirstChildWhichIsA("BasePart")
+                    if npcHrp then
+                        local distance = (hrp.Position - npcHrp.Position).Magnitude
+                        if distance < nearestDistance and distance < 1000 then
+                            nearestDistance = distance
+                            nearestNPC = npc
+                        end
                     end
                 end
             end
