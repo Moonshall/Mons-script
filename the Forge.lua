@@ -1,4 +1,4 @@
--- The Forge - Complete Script (Orion UI)
+-- The Forge - Complete Script (NatHub UI)
 -- Features: Anti AFK, Auto Mining, Auto Kill Zombie
 -- Game ID: 76558904092080
 
@@ -19,33 +19,31 @@ local Services = {
     Tool = ReplicatedStorage.Shared.Packages.Knit.Services.ToolService,
 }
 
--- Load Kavo UI Library (Most Stable)
-local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/xHeptc/Kavo-UI-Library/main/source.lua"))()
+-- Load NatHub UI Library
+local NatHub = loadstring(game:HttpGet("https://raw.githubusercontent.com/dy1zn4t/bmF0dWk-/refs/heads/main/ui.lua"))()
 
-local Window = Library.CreateLib("The Forge - Auto Farm Script", "DarkTheme")
-
--- Notification
-game:GetService("StarterGui"):SetCore("SendNotification", {
-	Title = "The Forge Script";
-	Text = "Script loaded successfully!";
-	Duration = 5;
+local Window = NatHub:CreateWindow({
+	Title = "The Forge Script",
+	Icon = "rbxassetid://113216930555884",
+	Author = "Script Hub",
+	Folder = "TheForgeHub",
+	Size = UDim2.fromOffset(580, 460),
+	LiveSearchDropdown = true,
+    AutoSave = true,
+    FileSaveName = "TheForge_Config.json",
 })
 
--- Create Tabs (Kavo format)
-local MainTab = Window:NewTab("Anti AFK")
-local MainSection = MainTab:NewSection("Anti AFK Controls")
+-- Create Tabs (NatHub format)
+local Tabs = {
+    InfoTab = Window:Tab({ Title = "Info", Icon = "info", Desc = "Information about the script." }),
+	MainTab = Window:Tab({ Title = "Anti AFK", Icon = "shield", Desc = "Bypass Roblox 20 minute AFK detection." }),
+	FarmTab = Window:Tab({ Title = "Auto Farm", Icon = "pickaxe", Desc = "Auto mining and farming features." }),
+	CombatTab = Window:Tab({ Title = "Combat", Icon = "sword", Desc = "Auto kill zombie and combat features." }),
+	MiscTab = Window:Tab({ Title = "Misc", Icon = "settings", Desc = "Miscellaneous settings." }),
+	
+}
 
-local FarmTab = Window:NewTab("Auto Farm")
-local FarmSection = FarmTab:NewSection("Farming Controls")
-
-local CombatTab = Window:NewTab("Combat")
-local CombatSection = CombatTab:NewSection("Combat Controls")
-
-local MiscTab = Window:NewTab("Misc")
-local MiscSection = MiscTab:NewSection("Miscellaneous")
-
-local InfoTab = Window:NewTab("Info")
-local InfoSection = InfoTab:NewSection("Information")
+Window:SelectTab(1)
 
 -- Anti AFK Variables
 local antiAFKEnabled = false
@@ -58,8 +56,8 @@ local autoMining = false
 local autoKillZombie = false
 local autoSell = false
 local autoForge = false
-local selectedOre = "All"
-local selectedNPC = "All"
+local selectedOre = "Stone"
+local selectedNPC = "Zombie"
 local selectedSellItem = "All Items"
 local flySpeed = 35 -- Reduced speed to avoid anti-cheat (was 50)
 local miningRange = 20
@@ -82,13 +80,13 @@ local humanizedSpeed = true
 local randomDelays = true
 
 -- Ore Names List
-local oreNames = {"All","Stone", "Emberstone", "Frost Ore", "Ironcore", "Shadow Shard", "Glimmer Crystal", 
+local oreNames = {"Stone", "Emberstone", "Frost Ore", "Ironcore", "Shadow Shard", "Glimmer Crystal", 
                   "Nova Ore", "Titan Rock", "Luminite", "Darksteel Chunk", "Magma Fragment",
                   "Storm Quartz", "Ancient Relic Stone", "Void Ore", "Copperlite", "Starfall Gem",
                   "Dragonstone", "Rune Ore", "Crystaline Rock", "Obsidian Core", "Radiant Gem"}
 
 -- NPC Names List for Auto Kill
-local npcNames = {"All", "Zombie", "Skeleton", "Goblin", "Orc", "Troll", "Dragon", "Spider", "Wolf",
+local npcNames = {"Zombie", "Skeleton", "Goblin", "Orc", "Troll", "Dragon", "Spider", "Wolf",
                   "Bear", "Bandit", "Ghost", "Demon", "Undead", "Monster", "Enemy"}
 
 -- Item Names for Selling
@@ -167,7 +165,42 @@ local function disableNoclip()
     end
 end
 
--- Tool Activation
+-- Ghost Tap - Creates invisible click at screen center
+local function ghostTap()
+    pcall(function()
+        local VIM = game:GetService("VirtualInputManager")
+        local Camera = workspace.CurrentCamera
+        local ViewportSize = Camera.ViewportSize
+        
+        -- Center of screen
+        local centerX = ViewportSize.X / 2
+        local centerY = ViewportSize.Y / 2
+        
+        -- Send click at center
+        VIM:SendMouseButtonEvent(centerX, centerY, 0, true, game, 0)
+        task.wait(0.01)
+        VIM:SendMouseButtonEvent(centerX, centerY, 0, false, game, 0)
+    end)
+end
+
+-- Mobile Touch Simulation
+local function mobileTouch()
+    pcall(function()
+        local VIM = game:GetService("VirtualInputManager")
+        local Camera = workspace.CurrentCamera
+        local ViewportSize = Camera.ViewportSize
+        
+        local centerX = ViewportSize.X / 2
+        local centerY = ViewportSize.Y / 2
+        
+        -- Simulate touch
+        VIM:SendTouchEvent(0, centerX, centerY, true, game, 0)
+        task.wait(0.01)
+        VIM:SendTouchEvent(0, centerX, centerY, false, game, 0)
+    end)
+end
+
+-- Tool Activation with Multiple Methods
 local function activateTool()
     local char = getCharacter()
     if not char then return end
@@ -186,33 +219,36 @@ local function activateTool()
         end)
     end
     
-    -- Method 3: VirtualInputManager
-    pcall(function()
-        local VIM = game:GetService("VirtualInputManager")
-        VIM:SendMouseButtonEvent(0, 0, 0, true, game, 0)
-        task.wait(0.01)
-        VIM:SendMouseButtonEvent(0, 0, 0, false, game, 0)
-    end)
+    -- Method 3: Ghost tap at screen center (PC)
+    ghostTap()
     
-    -- Method 4: Mouse simulation
+    -- Method 4: Mobile touch simulation
+    mobileTouch()
+    
+    -- Method 5: Legacy mouse simulation
     pcall(function()
-        if tool then
-            mouse1press()
-            task.wait(0.01)
-            mouse1release()
-        end
+        mouse1click()
     end)
 end
 
--- Auto Tap Functions
+-- Auto Tap Functions with Improved Timing
+local lastTapTime = 0
+local tapDelay = 0.08 -- Optimal delay for both PC and mobile
+
 local function startMiningTap()
     if miningTapConnection then
         miningTapConnection:Disconnect()
     end
-    miningTapConnection = RunService.Heartbeat:Connect(function()
-        if autoMining then
+    
+    lastTapTime = 0
+    
+    miningTapConnection = RunService.RenderStepped:Connect(function()
+        if not autoMining then return end
+        
+        local currentTime = tick()
+        if currentTime - lastTapTime >= tapDelay then
             activateTool()
-            task.wait(0.05)
+            lastTapTime = currentTime
         end
     end)
 end
@@ -228,10 +264,16 @@ local function startKillTap()
     if killTapConnection then
         killTapConnection:Disconnect()
     end
-    killTapConnection = RunService.Heartbeat:Connect(function()
-        if autoKillZombie then
+    
+    lastTapTime = 0
+    
+    killTapConnection = RunService.RenderStepped:Connect(function()
+        if not autoKillZombie then return end
+        
+        local currentTime = tick()
+        if currentTime - lastTapTime >= tapDelay then
             activateTool()
-            task.wait(0.05)
+            lastTapTime = currentTime
         end
     end)
 end
@@ -339,7 +381,8 @@ local function findNearestOre()
             end
             
             if isOre then
-                if selectedOre ~= "All" and not obj.Name:find(selectedOre) then
+                -- Filter by selected ore type (must match)
+                if not obj.Name:find(selectedOre) then
                     isOre = false
                 end
                 
@@ -373,17 +416,9 @@ local function findNearestZombie()
             if npcHumanoid and npcHumanoid.Health > 0 then
                 local isEnemy = false
                 
-                if selectedNPC == "All" then
-                    for _, enemyName in pairs(npcNames) do
-                        if npc.Name:lower():find(enemyName:lower()) then
-                            isEnemy = true
-                            break
-                        end
-                    end
-                else
-                    if npc.Name:lower():find(selectedNPC:lower()) then
-                        isEnemy = true
-                    end
+                -- Check for specific selected NPC only
+                if npc.Name:lower():find(selectedNPC:lower()) then
+                    isEnemy = true
                 end
                 
                 if isEnemy then
@@ -632,150 +667,318 @@ end
 -- UI ELEMENTS
 
 -- Main Tab
-MainSection:NewLabel("Prevents AFK kick after 20 minutes")
+Tabs.MainTab:Section({
+	Title = "Anti AFK Status",
+})
 
-MainSection:NewToggle("Enable Anti AFK", "Auto bypass AFK detection", function(state)
-	antiAFKEnabled = state
-	
-	if state then
-		if afkConnection then
-			afkConnection:Disconnect()
-		end
+Tabs.MainTab:Paragraph{
+	Title = "About Anti AFK",
+	Desc = "This feature prevents Roblox from kicking you after 20 minutes of inactivity."
+}
+
+Tabs.MainTab:Toggle({
+	Title = "Enable Anti AFK",
+	Icon = "shield-check",
+	Default = false,
+	Callback = function(state)
+		antiAFKEnabled = state
 		
-		afkConnection = RunService.Heartbeat:Connect(function()
-			if tick() - lastAction >= 60 then
-				performAntiAFK()
+		if state then
+			if afkConnection then
+				afkConnection:Disconnect()
 			end
-		end)
-		
-		LocalPlayer.Idled:connect(function()
-			if antiAFKEnabled then
-				VirtualUser:CaptureController()
-				VirtualUser:ClickButton2(Vector2.new())
+			
+			afkConnection = RunService.Heartbeat:Connect(function()
+				if tick() - lastAction >= 60 then
+					performAntiAFK()
+				end
+			end)
+			
+			LocalPlayer.Idled:connect(function()
+				if antiAFKEnabled then
+					VirtualUser:CaptureController()
+					VirtualUser:ClickButton2(Vector2.new())
+				end
+			end)
+		else
+			if afkConnection then
+				afkConnection:Disconnect()
+				afkConnection = nil
 			end
-		end)
-	else
-		if afkConnection then
-			afkConnection:Disconnect()
-			afkConnection = nil
 		end
 	end
-end)
+})
 
-MainSection:NewButton("Manual AFK Action", "Trigger anti-AFK manually", function()
-	if antiAFKEnabled then
-		performAntiAFK()
+Tabs.MainTab:Button({
+	Title = "Manual Action",
+	Desc = "Trigger anti-AFK manually",
+	Callback = function()
+		if antiAFKEnabled then
+			performAntiAFK()
+		end
 	end
-end)
+})
 
 -- Farm Tab
-FarmSection:NewLabel("Automatically fly to ores and mine them")
+Tabs.FarmTab:Section({
+	Title = "Auto Mining",
+})
 
-FarmSection:NewDropdown("Select Ore Type", "Choose specific ore", oreNames, function(value)
-	selectedOre = value
-end)
+Tabs.FarmTab:Paragraph{
+	Title = "Auto Mining",
+	Desc = "Automatically fly to ores and mine them."
+}
 
-FarmSection:NewToggle("Enable Auto Mining", "Start auto mining", function(state)
-	autoMining = state
-	
-	if state then
-		startAutoMining()
-	else
-		if farmConnection then
-			farmConnection:Disconnect()
-			farmConnection = nil
-		end
-		disableNoclip()
-		stopMiningTap()
+Tabs.FarmTab:Dropdown({
+	Title = "Select Ore Type",
+	Values = oreNames,
+	Value = "Stone",
+	Callback = function(value)
+		selectedOre = value
 	end
-end)
+})
 
-FarmSection:NewSlider("Mining Range", "Distance to mine", 50, 5, function(value)
-	miningRange = value
-end)
+Tabs.FarmTab:Toggle({
+	Title = "Enable Auto Mining",
+	Icon = "pickaxe",
+	Default = false,
+	Callback = function(state)
+		autoMining = state
+		
+		if state then
+			startAutoMining()
+		else
+			if farmConnection then
+				farmConnection:Disconnect()
+				farmConnection = nil
+			end
+			disableNoclip()
+			stopMiningTap()
+		end
+	end
+})
 
-FarmSection:NewSlider("Fly Speed", "Movement speed", 60, 20, function(value)
-	flySpeed = value
-end)
+Tabs.FarmTab:Slider({
+	Title = "Mining Range",
+	Value = {
+		Min = 5,
+		Max = 50,
+		Default = 20,
+	},
+	Callback = function(value)
+		miningRange = value
+	end
+})
 
--- Anti-Cheat Protection Section
-local AntiCheatSection = FarmTab:NewSection("Anti-Cheat Protection")
+Tabs.FarmTab:Slider({
+	Title = "Fly Speed",
+	Value = {
+		Min = 20,
+		Max = 60,
+		Default = 35,
+	},
+	Callback = function(value)
+		flySpeed = value
+	end
+})
 
-AntiCheatSection:NewLabel("Enable these to avoid detection")
+Tabs.FarmTab:Section({
+	Title = "Anti-Cheat Protection",
+})
 
-AntiCheatSection:NewToggle("Anti-Cheat Bypass", "Humanized movements", function(state)
-	useAntiCheat = state
-end)
+Tabs.FarmTab:Paragraph{
+	Title = "Safety Features",
+	Desc = "Enable these to avoid anti-cheat detection."
+}
 
-AntiCheatSection:NewToggle("Random Delays", "Random timing", function(state)
-	randomDelays = state
-end)
+Tabs.FarmTab:Toggle({
+	Title = "Anti-Cheat Bypass",
+	Icon = "shield",
+	Default = true,
+	Callback = function(state)
+		useAntiCheat = state
+	end
+})
 
-AntiCheatSection:NewToggle("Humanized Speed", "Variable speed", function(state)
-	humanizedSpeed = state
-end)
+Tabs.FarmTab:Toggle({
+	Title = "Random Delays",
+	Icon = "clock",
+	Default = true,
+	Callback = function(state)
+		randomDelays = state
+	end
+})
+
+Tabs.FarmTab:Toggle({
+	Title = "Humanized Speed",
+	Icon = "activity",
+	Default = true,
+	Callback = function(state)
+		humanizedSpeed = state
+	end
+})
+
+Tabs.FarmTab:Section({
+	Title = "Auto Tap Settings",
+})
+
+Tabs.FarmTab:Paragraph{
+	Title = "Ghost Tap System",
+	Desc = "Uses invisible clicks at screen center for better compatibility."
+}
+
+Tabs.FarmTab:Slider({
+	Title = "Tap Speed",
+	Value = {
+		Min = 0.05,
+		Max = 0.2,
+		Default = 0.08,
+	},
+	Callback = function(value)
+		tapDelay = value
+	end
+})
 
 -- Combat Tab
-CombatSection:NewLabel("Automatically detect and kill NPCs/enemies")
+Tabs.CombatTab:Section({
+	Title = "Auto Kill",
+})
 
-CombatSection:NewDropdown("Select NPC Type", "Choose enemy type", npcNames, function(value)
-	selectedNPC = value
-end)
+Tabs.CombatTab:Paragraph{
+	Title = "Auto Kill NPC",
+	Desc = "Automatically detect and kill nearby NPCs/enemies."
+}
 
-CombatSection:NewToggle("Enable Auto Kill", "Start auto kill", function(state)
-	autoKillZombie = state
-	
-	if state then
-		startAutoKill()
-	else
-		if killConnection then
-			killConnection:Disconnect()
-			killConnection = nil
-		end
-		disableNoclip()
-		stopKillTap()
-		currentTarget = nil
+Tabs.CombatTab:Dropdown({
+	Title = "Select NPC Type",
+	Values = npcNames,
+	Value = "Zombie",
+	Callback = function(value)
+		selectedNPC = value
 	end
-end)
+})
+
+Tabs.CombatTab:Toggle({
+	Title = "Enable Auto Kill",
+	Icon = "sword",
+	Default = false,
+	Callback = function(state)
+		autoKillZombie = state
+		
+		if state then
+			startAutoKill()
+		else
+			if killConnection then
+				killConnection:Disconnect()
+				killConnection = nil
+			end
+			disableNoclip()
+			stopKillTap()
+			currentTarget = nil
+		end
+	end
+})
 
 -- Misc Tab
-MiscSection:NewButton("Reset Stats", "Reset all statistics", function()
-	statsCollected = 0
-	zombiesKilled = 0
-	actionCount = 0
-	itemsSold = 0
-	itemsForged = 0
-	game:GetService("StarterGui"):SetCore("SendNotification", {
-		Title = "Stats Reset";
-		Text = "All statistics have been reset!";
-		Duration = 3;
-	})
-end)
+Tabs.MiscTab:Section({
+	Title = "Testing",
+})
 
-MiscSection:NewButton("Teleport to Spawn", "TP to spawn point", function()
-	local hrp = getHumanoidRootPart()
-	if hrp then
-		hrp.CFrame = CFrame.new(0, 50, 0)
+Tabs.MiscTab:Button({
+	Title = "Test Ghost Tap",
+	Desc = "Test auto tap system",
+	Callback = function()
+		for i = 1, 5 do
+			activateTool()
+			wait(0.1)
+		end
+		game:GetService("StarterGui"):SetCore("SendNotification", {
+			Title = "Ghost Tap Test";
+			Text = "Sent 5 taps to screen center!";
+			Duration = 3;
+		})
 	end
-end)
+})
+
+Tabs.MiscTab:Button({
+	Title = "Test Tool Activation",
+	Desc = "Test all tap methods",
+	Callback = function()
+		local char = getCharacter()
+		local tool = char and char:FindFirstChildOfClass("Tool")
+		
+		game:GetService("StarterGui"):SetCore("SendNotification", {
+			Title = "Tool Check";
+			Text = tool and "Tool equipped: "..tool.Name or "No tool equipped!";
+			Duration = 3;
+		})
+		
+		if tool then
+			activateTool()
+		end
+	end
+})
+
+Tabs.MiscTab:Section({
+	Title = "Player Settings",
+})
+
+Tabs.MiscTab:Button({
+	Title = "Reset Stats",
+	Desc = "Reset all statistics",
+	Callback = function()
+		statsCollected = 0
+		zombiesKilled = 0
+		actionCount = 0
+		itemsSold = 0
+		itemsForged = 0
+		game:GetService("StarterGui"):SetCore("SendNotification", {
+			Title = "Stats Reset";
+			Text = "All statistics have been reset!";
+			Duration = 3;
+		})
+	end
+})
+
+Tabs.MiscTab:Button({
+	Title = "Teleport to Spawn",
+	Desc = "TP to spawn point",
+	Callback = function()
+		local hrp = getHumanoidRootPart()
+		if hrp then
+			hrp.CFrame = CFrame.new(0, 50, 0)
+		end
+	end
+})
 
 -- Info Tab
-InfoSection:NewLabel("The Forge Script v2.1")
-InfoSection:NewLabel("All-in-one farming script")
-InfoSection:NewLabel("")
-InfoSection:NewLabel("Features:")
-InfoSection:NewLabel("• Anti AFK bypass")
-InfoSection:NewLabel("• Auto Mining with ore selection")
-InfoSection:NewLabel("• Auto Kill with NPC selection")
-InfoSection:NewLabel("• Noclip during farming")
-InfoSection:NewLabel("• Auto-tap system (4 methods)")
-InfoSection:NewLabel("• Session statistics tracking")
-InfoSection:NewLabel("")
-InfoSection:NewLabel("Session Stats:")
+Tabs.InfoTab:Section({
+	Title = "Script Information",
+})
+
+Tabs.InfoTab:Paragraph{
+	Title = "The Forge Script v2.2",
+	Desc = "All-in-one farming script with anti-cheat protection."
+}
+
+Tabs.InfoTab:Paragraph{
+	Title = "Features",
+	Desc = "• Anti AFK bypass\n• Auto Mining with ore selection\n• Auto Kill with NPC selection\n• Anti-cheat protection\n• Humanized movements\n• Auto-tap system (4 methods)\n• Session statistics tracking"
+}
+
+Tabs.InfoTab:Section({
+	Title = "Statistics",
+})
+
+local statsLabel = Tabs.InfoTab:Paragraph{
+	Title = "Session Stats",
+	Desc = "AFK Actions: 0 | Ores: 0 | Kills: 0"
+}
 
 spawn(function()
 	while wait(5) do
-		-- Update stats in console
-		print("Stats - Actions: "..actionCount.." | Ores: "..statsCollected.." | Kills: "..zombiesKilled)
+		pcall(function()
+			statsLabel:SetDesc("AFK Actions: "..actionCount.." | Ores: "..statsCollected.." | Kills: "..zombiesKilled)
+		end)
 	end
 end)
