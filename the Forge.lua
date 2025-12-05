@@ -244,20 +244,49 @@ local function activateTool()
         tool:Activate()
     end)
     
-    -- Method 3: VirtualInputManager click on viewport (works for most games)
+    -- Method 3: VirtualInputManager with visible cursor spawn
     pcall(function()
         local VIM = game:GetService("VirtualInputManager")
         local Camera = workspace.CurrentCamera
         local ViewportSize = Camera.ViewportSize
+        local Mouse = LocalPlayer:GetMouse()
         
-        -- Click at center of screen
-        local centerX = ViewportSize.X / 2
-        local centerY = ViewportSize.Y / 2
+        -- Get target position on screen
+        local clickX, clickY
         
-        -- Send click event (doesn't move visible cursor)
-        VIM:SendMouseButtonEvent(centerX, centerY, 0, true, game, 0)
+        -- Try to get ore/npc position on screen for mining/kill
+        if autoMining then
+            local ore = findNearestOre()
+            if ore then
+                local screenPos, onScreen = Camera:WorldToScreenPoint(ore.Position)
+                if onScreen then
+                    clickX = screenPos.X
+                    clickY = screenPos.Y
+                end
+            end
+        elseif autoKillZombie and currentTarget then
+            local targetPos = currentTarget:FindFirstChild("HumanoidRootPart")
+            if targetPos then
+                local screenPos, onScreen = Camera:WorldToScreenPoint(targetPos.Position)
+                if onScreen then
+                    clickX = screenPos.X
+                    clickY = screenPos.Y
+                end
+            end
+        end
+        
+        -- Fallback to center if no target found
+        if not clickX then
+            clickX = ViewportSize.X / 2
+            clickY = ViewportSize.Y / 2
+        end
+        
+        -- Spawn cursor at position and click
+        VIM:SendMouseMoveEvent(clickX, clickY, game)
+        task.wait(0.005)
+        VIM:SendMouseButtonEvent(clickX, clickY, 0, true, game, 0)
         task.wait(0.01)
-        VIM:SendMouseButtonEvent(centerX, centerY, 0, false, game, 0)
+        VIM:SendMouseButtonEvent(clickX, clickY, 0, false, game, 0)
     end)
     
     -- Method 4: Mobile touch simulation
