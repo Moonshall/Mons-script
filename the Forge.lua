@@ -1,6 +1,6 @@
--- The Forge - Complete Script (NatHub UI)
--- Features: Anti AFK, Auto Mining, Auto Kill Zombie
--- Game ID: 76558904092080
+-- the forge auto farm
+-- discord: mons#1234
+-- v2.1
 
 local VirtualUser = game:GetService("VirtualUser")
 local Players = game:GetService("Players")
@@ -159,14 +159,13 @@ local function getHumanoid()
     return char and char:FindFirstChild("Humanoid")
 end
 
--- Noclip Function
-local isFlying = false
+local flying = false
 
 local function enableNoclip()
     if noclipConnection then return end
-    isFlying = true
+    flying = true
     noclipConnection = RunService.Stepped:Connect(function()
-        if isFlying then
+        if flying then
             local char = getCharacter()
             if char then
                 for _, part in pairs(char:GetDescendants()) do
@@ -180,7 +179,7 @@ local function enableNoclip()
 end
 
 local function disableNoclip()
-    isFlying = false
+    flying = false
     if noclipConnection then
         noclipConnection:Disconnect()
         noclipConnection = nil
@@ -195,9 +194,9 @@ local function disableNoclip()
     end
 end
 
--- Ghost Tap - Simulates click without affecting actual mouse cursor
+-- tap without cursor
 local function ghostTap()
-    -- Method 1: Direct tool remote call (doesn't use cursor)
+    -- direct tool call
     pcall(function()
         local tool = getCharacter():FindFirstChildOfClass("Tool")
         if tool then
@@ -409,27 +408,24 @@ local function stopKillTap()
     end
 end
 
--- Equipment Functions
 local function equipPickaxe()
     local char = getCharacter()
     if not char then return false end
     
-    local currentTool = char:FindFirstChildOfClass("Tool")
-    if currentTool and (currentTool.Name:lower():find("pick") or currentTool.Name:lower():find("drill")) then
+    local cur = char:FindFirstChildOfClass("Tool")
+    if cur and (cur.Name:lower():find("pick") or cur.Name:lower():find("drill")) then
         return true
     end
     
-    -- First, try to find any pickaxe in backpack
-    local backpack = LocalPlayer:FindFirstChild("Backpack")
-    if backpack then
-        -- Try to find any tool with "pick" or "drill" in name
-        for _, tool in pairs(backpack:GetChildren()) do
-            if tool:IsA("Tool") then
-                local toolName = tool.Name:lower()
-                if toolName:find("pick") or toolName:find("drill") or toolName:find("mine") then
-                    local humanoid = getHumanoid()
-                    if humanoid then
-                        humanoid:EquipTool(tool)
+    local bp = LocalPlayer:FindFirstChild("Backpack")
+    if bp then
+        for _, t in pairs(bp:GetChildren()) do
+            if t:IsA("Tool") then
+                local n = t.Name:lower()
+                if n:find("pick") or n:find("drill") or n:find("mine") then
+                    local h = getHumanoid()
+                    if h then
+                        h:EquipTool(t)
                         task.wait(0.1)
                         return true
                     end
@@ -498,16 +494,16 @@ local function equipWeapon()
         end
     end
     
-    local weaponNames = {"Sword", "Frostbite Blade", "Shadow Cleaver", "Void Hammer", "Stormbreaker Axe", "Molten Warhammer", "Iron Sword", "Steel Blade", "Starter Sword"}
+    local weps = {"Sword", "Frostbite Blade", "Shadow Cleaver", "Void Hammer", "Stormbreaker Axe", "Molten Warhammer", "Iron Sword", "Steel Blade", "Starter Sword"}
     
-    local backpack = LocalPlayer:FindFirstChild("Backpack")
-    if backpack then
-        for _, weaponName in pairs(weaponNames) do
-            local tool = backpack:FindFirstChild(weaponName)
-            if tool and tool:IsA("Tool") then
-                local humanoid = getHumanoid()
-                if humanoid then
-                    humanoid:EquipTool(tool)
+    local bp = LocalPlayer:FindFirstChild("Backpack")
+    if bp then
+        for _, w in pairs(weps) do
+            local t = bp:FindFirstChild(w)
+            if t and t:IsA("Tool") then
+                local h = getHumanoid()
+                if h then
+                    h:EquipTool(t)
                     return true
                 end
             end
@@ -524,31 +520,28 @@ local function equipWeapon()
     return char:FindFirstChildOfClass("Tool") ~= nil
 end
 
--- Find Functions
 local function findNearestOre()
     local hrp = getHumanoidRootPart()
     if not hrp then return nil end
     
-    local nearestOre = nil
-    local nearestDistance = math.huge
+    local near = nil
+    local dist = math.huge
     
     for _, obj in pairs(workspace:GetDescendants()) do
         if obj:IsA("Model") then
-            -- Exclude pickaxes, tools, and player-owned objects
-            local objNameLower = obj.Name:lower()
-            if objNameLower:find("pickaxe") or objNameLower:find("sword") or objNameLower:find("weapon") or objNameLower:find("tool") or objNameLower:find("axe") or objNameLower:find("stonewakes") then
+            local n = obj.Name:lower()
+            if n:find("pickaxe") or n:find("sword") or n:find("weapon") or n:find("tool") or n:find("axe") or n:find("stonewakes") then
                 continue
             end
             
-            -- Exclude if parent is a player or character
-            local parent = obj.Parent
-            if parent and (parent.Name == game.Players.LocalPlayer.Name or parent:FindFirstChild("Humanoid")) then
+            local p = obj.Parent
+            if p and (p.Name == game.Players.LocalPlayer.Name or p:FindFirstChild("Humanoid")) then
                 continue
             end
             
-            local isOre = false
+            local ok = false
             
-            -- Must match selected ore type exactly
+            -- match ore type
             if obj.Name:find(selectedOre) then
                 isOre = true
             end
@@ -750,8 +743,8 @@ local function runDialogueCommand(command)
 end
 
 -- Auto Functions
-local lastMineTime = 0
-local miningCooldown = 0.5
+local lastMine = 0
+local cd = 0.5
 
 local function startAutoMining()
     if farmConnection then
@@ -765,9 +758,8 @@ local function startAutoMining()
     farmConnection = RunService.Heartbeat:Connect(function()
         if not autoMining then return end
         
-        -- Anti-cheat: Rate limiting
-        local currentTime = tick()
-        if currentTime - lastMineTime < miningCooldown then
+        local t = tick()
+        if t - lastMine < cd then
             return
         end
         
@@ -777,22 +769,18 @@ local function startAutoMining()
             if hrp then
                 local distance = (hrp.Position - ore.Position).Magnitude
                 
-                -- Anti-cheat: Don't mine if too far (suspicious)
                 if distance > 300 then
                     return
                 end
                 
                 if distance > miningRange then
-                    -- Position underground at set distance below ore
                     local targetPos = ore.Position + Vector3.new(0, undergroundDistance, 0)
                     tweenTo(targetPos, flySpeed)
                     
-                    -- Make character face upward when underground
                     if undergroundDistance < 0 then
                         hrp.CFrame = CFrame.new(hrp.Position, ore.Position)
                     end
                 else
-                    -- Face upward to ore when close
                     if undergroundDistance < 0 then
                         hrp.CFrame = CFrame.new(hrp.Position, ore.Position)
                     end
