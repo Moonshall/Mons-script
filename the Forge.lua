@@ -817,22 +817,25 @@ Tabs.InfoTab:Section({
 	Title = "Statistics",
 })
 
-local statsLabel = Tabs.InfoTab:Label({
-	Title = "Loading stats...",
-})
+local statsParagraph = Tabs.InfoTab:Paragraph{
+	Title = "Stats",
+	Desc = "Loading stats..."
+}
 
 -- Update stats every second
 task.spawn(function()
 	while task.wait(1) do
-		local statsText = string.format(
-			"Ores Collected: %d\nNPCs Killed: %d\nItems Sold: %d\nItems Forged: %d",
-			statsCollected,
-			zombiesKilled,
-			itemsSold,
-			itemsForged
-		)
 		pcall(function()
-			statsLabel:SetTitle(statsText)
+			if statsParagraph and statsParagraph.SetDesc then
+				local statsText = string.format(
+					"Ores: %d | NPCs: %d | Sold: %d | Forged: %d",
+					statsCollected,
+					zombiesKilled,
+					itemsSold,
+					itemsForged
+				)
+				statsParagraph:SetDesc(statsText)
+			end
 		end)
 	end
 end)
