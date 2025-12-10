@@ -37,7 +37,7 @@ if not success or not NatHub then
 end
 
 local Window = NatHub:CreateWindow({
-	Title = "The Forge Hub",
+	Title = "Nathub",
 	Icon = "rbxassetid://113216930555884",
 	Author = "By Mons",
 	Folder = "TheForgeHub",
@@ -59,10 +59,10 @@ end)
 
 -- Create Tabs (NatHub format)
 local Tabs = {
-    InfoTab = Window:Tab({ Title = "Info", Icon = "info", Desc = "Script information and statistics" }),
-	FarmTab = Window:Tab({ Title = "Farm", Icon = "activity", Desc = "Auto mining and farming" }),
-	CombatTab = Window:Tab({ Title = "Combat", Icon = "zap", Desc = "Auto kill mobs" }),
-	MiscTab = Window:Tab({ Title = "Misc", Icon = "settings", Desc = "Other features" }),
+    InfoTab = Window:Tab({ Title = "Info", Icon = "info" }),
+	FarmTab = Window:Tab({ Title = "Farm", Icon = "pickaxe" }),
+	CombatTab = Window:Tab({ Title = "Combat", Icon = "sword" }),
+	MiscTab = Window:Tab({ Title = "Misc", Icon = "tool" }),
 }
 
 Window:SelectTab(1)
@@ -224,9 +224,17 @@ local function startMiningTool()
         if not autoMining then return end
         if isUIVisible then return end
         
-        equipPickaxe()
-        activateTool()
-        task.wait(0.1)
+        local ore = findNearestOre()
+        if ore then
+            local hrp = getHumanoidRootPart()
+            if hrp and ore then
+                local dist = (hrp.Position - ore.Position).Magnitude
+                if dist <= miningRange then
+                    equipPickaxe()
+                    activateTool()
+                end
+            end
+        end
     end)
 end
 
@@ -244,9 +252,17 @@ local function startKillTool()
         if not autoKillZombie then return end
         if isUIVisible then return end
         
-        equipWeapon()
-        activateTool()
-        task.wait(0.1)
+        if currentTarget then
+            local hrp = getHumanoidRootPart()
+            local mobHrp = currentTarget:FindFirstChild("HumanoidRootPart")
+            if hrp and mobHrp then
+                local dist = (hrp.Position - mobHrp.Position).Magnitude
+                if dist <= 10 then
+                    equipWeapon()
+                    activateTool()
+                end
+            end
+        end
     end)
 end
 
@@ -810,87 +826,9 @@ Tabs.InfoTab:Section({
 })
 
 Tabs.InfoTab:Paragraph{
-	Title = "The Forge Hub v1.0",
-	Desc = "Advanced auto farming script with anti-detection features. Made by Mons for The Forge game."
+	Title = "The Forge Hub",
+	Desc = "Auto farming script for The Forge. Made by Mons."
 }
-
-Tabs.InfoTab:Button({
-	Title = "Join Discord",
-	Desc = "Get support and updates",
-	Callback = function()
-		setclipboard("discord.gg/yourserver")
-		game.StarterGui:SetCore("SendNotification", {
-			Title = "Discord";
-			Text = "Link copied to clipboard!";
-			Duration = 3;
-		})
-	end
-})
-
-Tabs.InfoTab:Section({
-	Title = "Statistics",
-})
-
-local statsParagraph = Tabs.InfoTab:Paragraph{
-	Title = "Stats",
-	Desc = "Loading stats..."
-}
-
--- Update stats every second
-task.spawn(function()
-	while task.wait(1) do
-		pcall(function()
-			if statsParagraph and statsParagraph.SetDesc then
-				local statsText = string.format(
-					"Ores: %d | NPCs: %d | Sold: %d | Forged: %d",
-					statsCollected,
-					zombiesKilled,
-					itemsSold,
-					itemsForged
-				)
-				statsParagraph:SetDesc(statsText)
-			end
-		end)
-	end
-end)
-
-Tabs.InfoTab:Section({
-	Title = "Features",
-})
-
-Tabs.InfoTab:Paragraph{
-	Title = "Features List",
-	Desc = [[
-• Auto Mining - Farm ores automatically
-• Auto Kill - Kill NPCs automatically  
-• Auto Sell - Sell items by rarity
-• Auto Forge - Complete forge minigame
-• Anti-AFK - Prevent kicks
-• Fly Speed - Adjustable speed
-• Mining Range - Adjustable range
-• No cursor interference
-	]]
-}
-
-Tabs.InfoTab:Section({
-	Title = "Controls",
-})
-
-Tabs.InfoTab:Paragraph{
-	Title = "Keybinds",
-	Desc = "Right Ctrl - Minimize/Show UI"
-}
-
-Tabs.InfoTab:Button({
-	Title = "Reset Stats",
-	Desc = "Reset all statistics",
-	Callback = function()
-		statsCollected = 0
-		zombiesKilled = 0
-		itemsSold = 0
-		itemsForged = 0
-	end
-})
 
 -- Farm Tab
 Tabs.FarmTab:Section({
