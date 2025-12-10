@@ -17,6 +17,7 @@ local Services = {
     Status = ReplicatedStorage.Shared.Packages.Knit.Services.StatusService,
     Character = ReplicatedStorage.Shared.Packages.Knit.Services.CharacterService,
     Tool = ReplicatedStorage.Shared.Packages.Knit.Services.ToolService,
+    Forge = ReplicatedStorage.Shared.Packages.Knit.Services.ForgeService,
 }
 
 -- Load Orion UI Library (More stable and reliable)
@@ -75,6 +76,16 @@ local autoMining = false
 local autoKillZombie = false
 local autoSell = false
 local autoForge = false
+local autoInstantMelt = false
+local autoInstantPour = false
+local autoPerfectHammer = false
+local forgeItemType = "Weapon"
+local forgeOres = {
+    Stone = 1,
+    Tin = 1,
+    Iron = 1,
+    ["Sand Stone"] = 1
+}
 local selectedOre = "None"
 local selectedNPC = "None"
 local selectedSellItem = "All Items"
@@ -697,7 +708,102 @@ local function startAutoSell()
     end)
 end
 
--- Auto Forge Function
+-- Auto Forge Function with Complete Automation
+local isForging = false
+
+local function performCompleteForge()
+    if isForging then return end
+    isForging = true
+    
+    local forgeStation = workspace:FindFirstChild("Proximity") and workspace.Proximity:FindFirstChild("Forge")
+    if not forgeStation then
+        print("[Auto Forge] Forge station not found in workspace.Proximity")
+        isForging = false
+        return
+    end
+    
+    print("[Auto Forge] Starting forge process...")
+    
+    -- Step 1: Interact with forge station
+    pcall(function()
+        Services.Proximity.RF.Forge:InvokeServer(forgeStation)
+    end)
+    task.wait(0.5)
+    
+    -- Step 2: Start forge
+    pcall(function()
+        Services.Forge.RF.StartForge:InvokeServer(forgeStation)
+    end)
+    task.wait(0.5)
+    
+    -- Step 3: Melt (Instant if enabled)
+    pcall(function()
+        Services.Forge.RF.ChangeSequence:InvokeServer("Melt", {
+            FastForge = autoInstantMelt,
+            ItemType = forgeItemType,
+            Ores = forgeOres
+        })
+    end)
+    print("[Auto Forge] Melt stage" .. (autoInstantMelt and " (Instant)" or ""))
+    task.wait(autoInstantMelt and 0.5 or 3)
+    
+    -- Step 4: Pour (Instant if enabled)
+    pcall(function()
+        Services.Forge.RF.ChangeSequence:InvokeServer("Pour", {
+            ClientTime = tick()
+        })
+    end)
+    print("[Auto Forge] Pour stage" .. (autoInstantPour and " (Instant)" or ""))
+    task.wait(autoInstantPour and 0.5 or 3)
+    
+    -- Step 5: Hammer (Perfect if enabled)
+    if autoPerfectHammer then
+        -- Perfect hammer - wait for perfect timing
+        task.wait(0.1)
+        pcall(function()
+            Services.Forge.RF.ChangeSequence:InvokeServer("Hammer", {
+                ClientTime = tick(),
+                Perfect = true
+            })
+        end)
+        print("[Auto Forge] Hammer stage (Perfect)")
+    else
+        pcall(function()
+            Services.Forge.RF.ChangeSequence:InvokeServer("Hammer", {
+                ClientTime = tick()
+            })
+        end)
+        print("[Auto Forge] Hammer stage")
+    end
+    task.wait(2)
+    
+    -- Step 6: Water
+    pcall(function()
+        Services.Forge.RF.ChangeSequence:InvokeServer("Water", {
+            ClientTime = tick()
+        })
+    end)
+    print("[Auto Forge] Water stage")
+    task.wait(2)
+    
+    -- Step 7: Showcase
+    pcall(function()
+        Services.Forge.RF.ChangeSequence:InvokeServer("Showcase", {})
+    end)
+    print("[Auto Forge] Showcase stage")
+    task.wait(2)
+    
+    -- Step 8: End forge
+    pcall(function()
+        Services.Forge.RF.EndForge:InvokeServer()
+    end)
+    print("[Auto Forge] Forge completed!")
+    
+    itemsForged = itemsForged + 1
+    isForging = false
+    task.wait(1)
+end
+
 local function startAutoForge()
     if forgeConnection then
         forgeConnection:Disconnect()
@@ -705,6 +811,7 @@ local function startAutoForge()
     
     forgeConnection = RunService.Heartbeat:Connect(function()
         if not autoForge then return end
+        if isForging then return end
         
         local forgeStation = findNearestForgeStation()
         if forgeStation then
@@ -722,38 +829,13 @@ local function startAutoForge()
                 if distance > 15 then
                     tweenTo(forgePart.Position + Vector3.new(0, 5, 0), flySpeed)
                 else
-                    -- Try multiple forge methods
-                    pcall(function()
-                        -- Method 1: Direct forge call
-                        Services.Proximity.RF.Forge:InvokeServer(forgeStation)
-                    end)
-                    
-                    wait(0.3)
-                    
-                    pcall(function()
-                        -- Method 2: Dialogue-based forge
-                        Services.Proximity.RF.Dialogue:InvokeServer(forgeStation)
-                    end)
-                    
-                    wait(0.5)
-                    
-                    pcall(function()
-                        -- Method 3: Run forge commands
-                        Services.Dialogue.RF.RunCommand:InvokeServer("Forge")
-                        Services.Dialogue.RF.RunCommand:InvokeServer("Craft")
-                        Services.Dialogue.RF.RunCommand:InvokeServer("Create")
-                    end)
-                    
-                    itemsForged = itemsForged + 1
-                    wait(3)
+                    -- Perform complete forge automation
+                    task.spawn(performCompleteForge)
                 end
             end
-        else
-            -- Debug: No forge station found
-            print("No forge station found nearby")
         end
         
-        wait(1)
+        task.wait(1)
     end)
 end
 
@@ -960,8 +1042,52 @@ Tabs.FarmTab:Section({
 
 Tabs.FarmTab:Paragraph{
     Title = "Auto Forge Items",
-    Desc = "Automatically fly to forge station and craft items."
+    Desc = "Automatically fly to forge station and craft items with instant melt, pour, and perfect hammer."
 }
+
+Tabs.FarmTab:Dropdown({
+    Title = "Forge Item Type",
+    Values = {"Weapon", "Tool", "Armor"},
+    Value = "Weapon",
+    Callback = function(value)
+        forgeItemType = value
+    end
+})
+
+Tabs.FarmTab:Toggle({
+    Title = "Auto Instant Melt",
+    Icon = "fire",
+    Default = false,
+    Callback = function(state)
+        autoInstantMelt = state
+    end
+})
+
+Tabs.FarmTab:Toggle({
+    Title = "Auto Instant Pour",
+    Icon = "droplet",
+    Default = false,
+    Callback = function(state)
+        autoInstantPour = state
+    end
+})
+
+Tabs.FarmTab:Toggle({
+    Title = "Auto Perfect Hammer (100%)",
+    Icon = "hammer",
+    Default = true,
+    Callback = function(state)
+        autoPerfectHammer = state
+    end
+})
+
+Tabs.FarmTab:Button({
+    Title = "Forge Once (Manual)",
+    Desc = "Perform one complete forge cycle manually",
+    Callback = function()
+        task.spawn(performCompleteForge)
+    end
+})
 
 local forgeToggle = Tabs.FarmTab:Toggle({
     Title = "Enable Auto Forge",
