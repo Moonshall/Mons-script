@@ -101,14 +101,17 @@ local randomDelays = true
 
 -- Ore Names List (Must match game exactly)
 local oreNames = {
-    "Stone", "Copper", "Iron", "Coal", "Silver", "Gold", "Emerald", "Ruby", "Sapphire",
-    "Diamond", "Obsidian", "Mithril", "Adamantite", "Runite", "Dragonstone", "Crystal",
-    "Void Stone", "Celestial Ore", "Dark Matter", "Starlight Ore"
+    "Rock", "Earth Crystal", "Basalt Rock", "Cyan Crystal", "Light Crystal", 
+    "Violet Crystal", "BasaltVein", "Boulder", "Volcanic Rock", "Pebble", 
+    "Basalt Core", "Lucky Block"
 }
 
 -- NPC Names List for Auto Kill
-local npcNames = {"Zombie", "Skeleton", "Goblin", "Orc", "Troll", "Dragon", "Spider", "Wolf",
-                  "Bear", "Bandit", "Ghost", "Demon", "Undead", "Monster", "Enemy"}
+local npcNames = {
+    "Delver Zombie", "Deathaxe", "Skeleton", "Axe Skeleton", "Reaper", 
+    "Skeleton Rogue", "Blazing Slime", "Bomber", "Slime", "Elite Deathaxe Skeleton", 
+    "Elite Zombie", "Brute Zombie", "Elite", "Rogue Skeleton", "Blight Pyromancer", "Zombie"
+}
 
 -- Sell by Rarity Categories
 local sellCategories = {
@@ -632,32 +635,59 @@ local function completeForgeMinigame()
     if isForging then return end
     isForging = true
     
-    -- Wait for minigame to start
-    task.wait(0.3)
+    task.wait(0.2)
     
-    -- Complete the sequence automatically
-    local success = true
-    local attempts = 0
-    local maxAttempts = 20
-    
-    while autoForgeEnabled and attempts < maxAttempts do
-        attempts = attempts + 1
+    -- Auto Melt Phase
+    local meltAttempts = 0
+    while autoForgeEnabled and meltAttempts < 15 do
+        meltAttempts = meltAttempts + 1
         
-        -- Send perfect sequence timing
         pcall(function()
-            Services.Forge.RF.ChangeSequence:InvokeServer()
+            Services.Forge.RF.ChangeSequence:InvokeServer("Melt")
         end)
         
-        task.wait(0.15)
+        task.wait(0.1)
         
-        -- Check if forge is done
         local forgeUI = LocalPlayer.PlayerGui:FindFirstChild("ForgeUI") or LocalPlayer.PlayerGui:FindFirstChild("Forge")
-        if not forgeUI or not forgeUI.Enabled then
-            break
-        end
+        if not forgeUI or not forgeUI.Enabled then break end
     end
     
-    -- End forge
+    task.wait(0.15)
+    
+    -- Auto Pour Phase
+    local pourAttempts = 0
+    while autoForgeEnabled and pourAttempts < 15 do
+        pourAttempts = pourAttempts + 1
+        
+        pcall(function()
+            Services.Forge.RF.ChangeSequence:InvokeServer("Pour")
+        end)
+        
+        task.wait(0.1)
+        
+        local forgeUI = LocalPlayer.PlayerGui:FindFirstChild("ForgeUI") or LocalPlayer.PlayerGui:FindFirstChild("Forge")
+        if not forgeUI or not forgeUI.Enabled then break end
+    end
+    
+    task.wait(0.15)
+    
+    -- Auto Hammer Phase
+    local hammerAttempts = 0
+    while autoForgeEnabled and hammerAttempts < 15 do
+        hammerAttempts = hammerAttempts + 1
+        
+        pcall(function()
+            Services.Forge.RF.ChangeSequence:InvokeServer("Hammer")
+        end)
+        
+        task.wait(0.1)
+        
+        local forgeUI = LocalPlayer.PlayerGui:FindFirstChild("ForgeUI") or LocalPlayer.PlayerGui:FindFirstChild("Forge")
+        if not forgeUI or not forgeUI.Enabled then break end
+    end
+    
+    -- Complete forge
+    task.wait(0.2)
     pcall(function()
         Services.Forge.RF.EndForge:InvokeServer()
     end)
@@ -769,6 +799,78 @@ local function startAutoKill()
 end
 
 -- UI ELEMENTS
+
+-- Info Tab
+Tabs.InfoTab:Section({
+	Title = "Welcome",
+})
+
+Tabs.InfoTab:Paragraph{
+	Title = "The Forge Script",
+	Desc = "Advanced auto farming script for The Forge game with anti-detection features."
+}
+
+Tabs.InfoTab:Section({
+	Title = "Statistics",
+})
+
+local statsLabel = Tabs.InfoTab:Label({
+	Title = "Loading stats...",
+})
+
+-- Update stats every second
+task.spawn(function()
+	while task.wait(1) do
+		local statsText = string.format(
+			"Ores Collected: %d\nNPCs Killed: %d\nItems Sold: %d\nItems Forged: %d",
+			statsCollected,
+			zombiesKilled,
+			itemsSold,
+			itemsForged
+		)
+		pcall(function()
+			statsLabel:SetTitle(statsText)
+		end)
+	end
+end)
+
+Tabs.InfoTab:Section({
+	Title = "Features",
+})
+
+Tabs.InfoTab:Paragraph{
+	Title = "Features List",
+	Desc = [[
+• Auto Mining - Farm ores automatically
+• Auto Kill - Kill NPCs automatically  
+• Auto Sell - Sell items by rarity
+• Auto Forge - Complete forge minigame
+• Anti-AFK - Prevent kicks
+• Fly Speed - Adjustable speed
+• Mining Range - Adjustable range
+• No cursor interference
+	]]
+}
+
+Tabs.InfoTab:Section({
+	Title = "Controls",
+})
+
+Tabs.InfoTab:Paragraph{
+	Title = "Keybinds",
+	Desc = "Right Ctrl - Minimize/Show UI"
+}
+
+Tabs.InfoTab:Button({
+	Title = "Reset Stats",
+	Desc = "Reset all statistics",
+	Callback = function()
+		statsCollected = 0
+		zombiesKilled = 0
+		itemsSold = 0
+		itemsForged = 0
+	end
+})
 
 -- Farm Tab
 Tabs.FarmTab:Section({
