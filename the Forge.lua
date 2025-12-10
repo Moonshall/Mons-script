@@ -20,50 +20,43 @@ local Services = {
     Forge = ReplicatedStorage.Shared.Packages.Knit.Services.ForgeService,
 }
 
--- Load Orion UI Library (More stable and reliable)
-local OrionLib = loadstring(game:HttpGet(('https://raw.githubusercontent.com/shlexware/Orion/main/source')))()
+-- Load NatUI Library
+local NatHub = loadstring(game:HttpGet("https://raw.githubusercontent.com/VEZ2/NAZAPI/main/api.lua"))()
 
-local Window = require(NatHub["3e"]):CreateWindow({
-	Title = "NatHub",
+local Window = NatHub:CreateWindow({
+	Title = "The Forge - Auto Farm",
 	Icon = "rbxassetid://113216930555884",
-	Author = "UI Development Test",
-	Folder = "Nathub",
+	Author = "NatHub Script",
+	Folder = "TheForgeConfig",
 	Size = UDim2.fromOffset(580, 460),
 	LiveSearchDropdown = true,
     AutoSave = true,
-    FileSaveName = "NatHub Config.json", -- wajib ada .json
+    FileSaveName = "TheForge_Config.json",
 })
 
--- Create Tabs (Orion format)
-local MainTab = Window:MakeTab({
-	Name = "Anti AFK",
-	Icon = "rbxassetid://4483345998",
-	PremiumOnly = false
-})
-
-local FarmTab = Window:MakeTab({
-	Name = "Auto Farm",
-	Icon = "rbxassetid://4483345998",
-	PremiumOnly = false
-})
-
-local CombatTab = Window:MakeTab({
-	Name = "Combat",
-	Icon = "rbxassetid://4483345998",
-	PremiumOnly = false
-})
-
-local MiscTab = Window:MakeTab({
-	Name = "Misc",
-	Icon = "rbxassetid://4483345998",
-	PremiumOnly = false
-})
-
-local InfoTab = Window:MakeTab({
-	Name = "Info",
-	Icon = "rbxassetid://4483345998",
-	PremiumOnly = false
-})
+-- Create Tabs
+local Tabs = {
+    MainTab = Window:CreateTab({
+        Title = "Anti AFK",
+        Icon = "shield"
+    }),
+    FarmTab = Window:CreateTab({
+        Title = "Auto Farm",
+        Icon = "pickaxe"
+    }),
+    CombatTab = Window:CreateTab({
+        Title = "Combat",
+        Icon = "sword"
+    }),
+    MiscTab = Window:CreateTab({
+        Title = "Misc",
+        Icon = "settings"
+    }),
+    InfoTab = Window:CreateTab({
+        Title = "Info",
+        Icon = "info"
+    })
+}
 
 -- Anti AFK Variables
 local antiAFKEnabled = false
@@ -840,24 +833,24 @@ local function startAutoForge()
 end
 
 -- Main Tab Content
-MainTab:AddSection({
-	Name = "Anti AFK Status"
+Tabs.MainTab:Section({
+	Title = "Anti AFK Status"
 })
 
-MainTab:AddParagraph("About Anti AFK", "This feature prevents Roblox from kicking you after 20 minutes of inactivity. The script simulates user input every few minutes to keep you active.")
-
-MainTab:AddParagraph("Status", "Anti AFK is currently disabled.")
+Tabs.MainTab:Paragraph{
+	Title = "About Anti AFK",
+	Desc = "This feature prevents Roblox from kicking you after 20 minutes of inactivity."
+}
 
 -- Anti AFK Toggle
-MainTab:AddToggle({
-	Name = "Enable Anti AFK",
+Tabs.MainTab:Toggle({
+	Title = "Enable Anti AFK",
+	Icon = "shield",
 	Default = false,
 	Callback = function(state) 
 		antiAFKEnabled = state
 		
 		if state then
-			statusParagraph:SetDesc("Anti AFK is enabled. You will not be kicked for inactivity.")
-			
 			-- Start Anti AFK loop
 			if afkConnection then
 				afkConnection:Disconnect()
@@ -877,10 +870,7 @@ MainTab:AddToggle({
 					VirtualUser:ClickButton2(Vector2.new())
 				end
 			end)
-			
 		else
-			statusParagraph:SetDesc("Anti AFK is currently disabled.")
-			
 			if afkConnection then
 				afkConnection:Disconnect()
 				afkConnection = nil
