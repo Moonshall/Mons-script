@@ -15,6 +15,7 @@ local Services = {
     Status = ReplicatedStorage.Shared.Packages.Knit.Services.StatusService,
     Character = ReplicatedStorage.Shared.Packages.Knit.Services.CharacterService,
     Tool = ReplicatedStorage.Shared.Packages.Knit.Services.ToolService,
+    Forge = ReplicatedStorage.Shared.Packages.Knit.Services.ForgeService,
 }
 
 -- Load NatHub UI Library
@@ -44,7 +45,13 @@ local Window = NatHub:CreateWindow({
 	LiveSearchDropdown = true,
     AutoSave = true,
     FileSaveName = "TheForge_Config.json",
+    MinimizeKey = Enum.KeyCode.RightControl,
 })
+
+-- Track UI visibility
+Window:OnMinimize(function(minimized)
+    isUIVisible = not minimized
+end)
 
 -- Create Tabs (NatHub format)
 local Tabs = {
@@ -71,9 +78,9 @@ local autoForge = false
 local selectedOre = "Stone"
 local selectedNPC = "Zombie"
 local selectedSellCategory = "All Items"
-local flySpeed = 30 -- Reduced speed to avoid anti-cheat
-local miningRange = 20
-local undergroundDistance = -5 -- Distance below ground for mining (negative Y position)
+local flySpeed = 30
+local miningRange = 15
+local autoForgeEnabled = false
 local farmConnection = nil
 local killConnection = nil
 local sellConnection = nil
@@ -551,15 +558,8 @@ local function startAutoMining()
                 if distance > 300 then return end
                 
                 if distance > miningRange then
-                    -- Go below ore
-                    local targetPos = ore.Position + Vector3.new(0, undergroundDistance, 0)
+                    local targetPos = ore.Position + Vector3.new(0, 3, 0)
                     tweenTo(targetPos, flySpeed)
-                end
-                
-                -- Face upward toward ore
-                if undergroundDistance < 0 then
-                    local lookPos = ore.Position
-                    hrp.CFrame = CFrame.new(hrp.Position, Vector3.new(lookPos.X, hrp.Position.Y + 100, lookPos.Z))
                 end
                 
                 pcall(function()
@@ -624,6 +624,82 @@ local function startAutoSell()
     end)
 end
 
+-- Auto Forge Minigame
+local forgeMinigameConnection = nil
+local isForging = false
+
+local function completeForgeMinigame()
+    if isForging then return end
+    isForging = true
+    
+    -- Wait for minigame to start
+    task.wait(0.3)
+    
+    -- Complete the sequence automatically
+    local success = true
+    local attempts = 0
+    local maxAttempts = 20
+    
+    while autoForgeEnabled and attempts < maxAttempts do
+        attempts = attempts + 1
+        
+        -- Send perfect sequence timing
+        pcall(function()
+            Services.Forge.RF.ChangeSequence:InvokeServer()
+        end)
+        
+        task.wait(0.15)
+        
+        -- Check if forge is done
+        local forgeUI = LocalPlayer.PlayerGui:FindFirstChild("ForgeUI") or LocalPlayer.PlayerGui:FindFirstChild("Forge")
+        if not forgeUI or not forgeUI.Enabled then
+            break
+        end
+    end
+    
+    -- End forge
+    pcall(function()
+        Services.Forge.RF.EndForge:InvokeServer()
+    end)
+    
+    itemsForged = itemsForged + 1
+    isForging = false
+end
+
+local function startAutoForge()
+    if forgeMinigameConnection then
+        forgeMinigameConnection:Disconnect()
+    end
+    
+    -- Listen for forge minigame start
+    forgeMinigameConnection = RunService.Heartbeat:Connect(function()
+        if not autoForgeEnabled then return end
+        
+        -- Check if forge UI is visible
+        local forgeUI = LocalPlayer.PlayerGui:FindFirstChild("ForgeUI") or LocalPlayer.PlayerGui:FindFirstChild("Forge")
+        if forgeUI and forgeUI.Enabled and not isForging then
+            completeForgeMinigame()
+        end
+    end)
+    
+    -- Also hook into forge service signal
+    pcall(function()
+        Services.Forge.RF.StartForge.OnClientInvoke = function()
+            if autoForgeEnabled then
+                task.spawn(completeForgeMinigame)
+            end
+        end
+    end)
+end
+
+local function stopAutoForge()
+    if forgeMinigameConnection then
+        forgeMinigameConnection:Disconnect()
+        forgeMinigameConnection = nil
+    end
+    isForging = false
+end
+
 local lastAttackTime = 0
 local attackCooldown = 0.3
 
@@ -675,16 +751,12 @@ local function startAutoKill()
                 end
                 
                 if distance > 8 then
-                    -- Go below NPC
-                    local targetPos = zombieHrp.Position + Vector3.new(0, undergroundDistance, 0)
+                    local targetPos = zombieHrp.Position + Vector3.new(0, 3, 0)
                     tweenTo(targetPos, flySpeed)
                 end
                 
-                -- Face upward toward target
-                if undergroundDistance < 0 then
-                    local lookPos = zombieHrp.Position
-                    hrp.CFrame = CFrame.new(hrp.Position, Vector3.new(lookPos.X, hrp.Position.Y + 100, lookPos.Z))
-                end
+                -- Face target
+                hrp.CFrame = CFrame.new(hrp.Position, zombieHrp.Position)
                 
                 lastAttackTime = t
             else
@@ -738,21 +810,28 @@ Tabs.FarmTab:Toggle({
 })
 
 Tabs.FarmTab:Slider({
-	Title = "Underground Distance",
+	Title = "Fly Speed",
 	Value = {
-		Min = -200,
-		Max = 0,
-		Default = -5,
+		Min = 10,
+		Max = 100,
+		Default = 30,
 	},
 	Callback = function(value)
-		undergroundDistance = value
+		flySpeed = value
 	end
 })
 
-Tabs.FarmTab:Paragraph{
-	Title = "Underground Mining",
-	Desc = "Mine from below! Negative = underground. 0 = surface. -50 = 50 studs below target. Safer from detection!"
-}
+Tabs.FarmTab:Slider({
+	Title = "Mining Range",
+	Value = {
+		Min = 5,
+		Max = 50,
+		Default = 15,
+	},
+	Callback = function(value)
+		miningRange = value
+	end
+})
 
 Tabs.FarmTab:Section({
 	Title = "Auto Sell",
@@ -853,6 +932,30 @@ Tabs.CombatTab:Toggle({
 })
 
 -- Misc Tab
+Tabs.MiscTab:Section({
+	Title = "Auto Forge",
+})
+
+Tabs.MiscTab:Paragraph{
+	Title = "Auto Forge Minigame",
+	Desc = "Automatically completes the forge minigame when you start forging."
+}
+
+Tabs.MiscTab:Toggle({
+	Title = "Enable Auto Forge",
+	Icon = "flame",
+	Default = false,
+	Callback = function(state)
+		autoForgeEnabled = state
+		
+		if state then
+			startAutoForge()
+		else
+			stopAutoForge()
+		end
+	end
+})
+
 Tabs.MiscTab:Section({
 	Title = "Anti AFK",
 })
