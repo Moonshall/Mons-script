@@ -830,6 +830,19 @@ Tabs.InfoTab:Paragraph{
 	Desc = "Auto farming script for The Forge. Made by Mons."
 }
 
+Tabs.InfoTab:Button({
+	Title = "Join Discord",
+	Desc = "Get support and updates",
+	Callback = function()
+		setclipboard("discord.gg/nathub")
+		game.StarterGui:SetCore("SendNotification", {
+			Title = "Discord";
+			Text = "Link copied to clipboard!";
+			Duration = 3;
+		})
+	end
+})
+
 -- Farm Tab
 Tabs.FarmTab:Section({
 	Title = "Auto Mining",
