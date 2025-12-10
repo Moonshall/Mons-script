@@ -1,7 +1,8 @@
-
+-- The Forge - Complete Script
+-- Features: Anti AFK, Auto Mining, Auto Kill Zombie
+-- Game ID: 76558904092080
 
 local VirtualUser = game:GetService("VirtualUser")
-local VirtualInputManager = game:GetService("VirtualInputManager")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -16,57 +17,52 @@ local Services = {
     Status = ReplicatedStorage.Shared.Packages.Knit.Services.StatusService,
     Character = ReplicatedStorage.Shared.Packages.Knit.Services.CharacterService,
     Tool = ReplicatedStorage.Shared.Packages.Knit.Services.ToolService,
-    Forge = ReplicatedStorage.Shared.Packages.Knit.Services.ForgeService,
 }
 
--- Load NatHub UI Library
-local success, NatHub = pcall(function()
-    local uiCode = game:HttpGet("https://raw.githubusercontent.com/dy1zn4t/bmF0dWk-/refs/heads/main/ui.lua")
-    if not uiCode or uiCode == "" then
-        error("Failed to fetch UI library")
-    end
-    return loadstring(uiCode)()
-end)
+-- Load Orion UI Library (More stable and reliable)
+local OrionLib = loadstring(game:HttpGet(('https://raw.githubusercontent.com/shlexware/Orion/main/source')))()
 
-if not success or not NatHub then
-    game:GetService("StarterGui"):SetCore("SendNotification", {
-        Title = "UI Load Error";
-        Text = "Failed to load NatHub UI. Please check your internet connection.";
-        Duration = 10;
-    })
-    error("Failed to load NatHub UI Library: " .. tostring(NatHub))
-end
-
-local Window = NatHub:CreateWindow({
-	Title = "Nathub",
+local Window = require(NatHub["3e"]):CreateWindow({
+	Title = "NatHub",
 	Icon = "rbxassetid://113216930555884",
-	Author = "By Mons",
-	Folder = "TheForge",
+	Author = "UI Development Test",
+	Folder = "Nathub",
 	Size = UDim2.fromOffset(580, 460),
 	LiveSearchDropdown = true,
     AutoSave = true,
-    FileSaveName = "TheForge_Config.json",
-    ShowMinimizeButton = true,
+    FileSaveName = "NatHub Config.json", -- wajib ada .json
 })
 
--- Track UI visibility with keybind
-local UIS = game:GetService("UserInputService")
-UIS.InputBegan:Connect(function(input, gpe)
-    if gpe then return end
-    if input.KeyCode == Enum.KeyCode.RightControl then
-        isUIVisible = not isUIVisible
-    end
-end)
+-- Create Tabs (Orion format)
+local MainTab = Window:MakeTab({
+	Name = "Anti AFK",
+	Icon = "rbxassetid://4483345998",
+	PremiumOnly = false
+})
 
--- Create Tabs (NatHub format)
-local Tabs = {
-    InfoTab = Window:Tab({ Title = "Info", Icon = "info" }),
-	FarmTab = Window:Tab({ Title = "Farm", Icon = "pickaxe" }),
-	CombatTab = Window:Tab({ Title = "Combat", Icon = "sword" }),
-	MiscTab = Window:Tab({ Title = "Misc", Icon = "tool" }),
-}
+local FarmTab = Window:MakeTab({
+	Name = "Auto Farm",
+	Icon = "rbxassetid://4483345998",
+	PremiumOnly = false
+})
 
-Window:SelectTab(1)
+local CombatTab = Window:MakeTab({
+	Name = "Combat",
+	Icon = "rbxassetid://4483345998",
+	PremiumOnly = false
+})
+
+local MiscTab = Window:MakeTab({
+	Name = "Misc",
+	Icon = "rbxassetid://4483345998",
+	PremiumOnly = false
+})
+
+local InfoTab = Window:MakeTab({
+	Name = "Info",
+	Icon = "rbxassetid://4483345998",
+	PremiumOnly = false
+})
 
 -- Anti AFK Variables
 local antiAFKEnabled = false
@@ -78,14 +74,12 @@ local actionCount = 0
 local autoMining = false
 local autoKillZombie = false
 local autoSell = false
-local isUIVisible = false
 local autoForge = false
-local selectedOre = "Stone"
-local selectedNPC = "Zombie"
-local selectedSellCategory = "All Items"
-local flySpeed = 30
-local miningRange = 15
-local autoForgeEnabled = false
+local selectedOre = "None"
+local selectedNPC = "None"
+local selectedSellItem = "All Items"
+local flySpeed = 50
+local miningRange = 20
 local farmConnection = nil
 local killConnection = nil
 local sellConnection = nil
@@ -97,59 +91,34 @@ local statsCollected = 0
 local zombiesKilled = 0
 local itemsSold = 0
 local itemsForged = 0
-local currentTarget = nil
 
--- Anti-Cheat Bypass Settings
-local useAntiCheat = true
-local humanizedSpeed = true
-local randomDelays = true
-
--- Ore Names List (Must match game exactly)
-local oreNames = {
-    "Rock", "Earth Crystal", "Basalt Rock", "Cyan Crystal", "Light Crystal", 
-    "Violet Crystal", "BasaltVein", "Boulder", "Volcanic Rock", "Pebble", 
-    "Basalt Core", "Lucky Block"
-}
+-- Ore Names List
+local oreNames = {"Rock", "Earth Crystal", "Basalt Rock", "Cyan Crystal", "Light Crystal", "Violet Crystal", "BasaltVein", "Boulder", "Volcanic Rock", "Pebble", "Basalt Core", "Lucky Block"}
 
 -- NPC Names List for Auto Kill
-local npcNames = {
-    "Delver Zombie", "Deathaxe", "Skeleton", "Axe Skeleton", "Reaper", 
-    "Skeleton Rogue", "Blazing Slime", "Bomber", "Slime", "Elite Deathaxe Skeleton", 
-    "Elite Zombie", "Brute Zombie", "Elite", "Rogue Skeleton", "Blight Pyromancer", "Zombie"
-}
+local npcNames = {"Delver Zombie", "Deathaxe", "Skeleton", "Axe Skeleton", "Reaper", "Skeleton Rogue", "Blazing Slime", "Bomber", "Slime", "Elite Deathaxe Skeleton", "Elite Zombie", "Brute Zombie", "Elite", "Rogue Skeleton", "Blight Pyromancer", "Zombie"}
 
--- Sell by Rarity Categories
-local sellCategories = {
-    "All Items",
-    "Common",
-    "Uncommon",
-    "Rare",
-    "Epic",
-    "Legendary",
-    "Mythic",
-    "Exotic",
-    "Ancient",
-    "Divine",
-    "Exclusive",
-    "Limited",
-    "Event",
-    "Artifact",
-    "Quest Item"
-}
+-- Item Names for Selling
+local sellItemNames = {"All Items", "Iron Shard", "Crystal Powder", "Forge Catalyst", "Binding Alloy",
+                        "Mystic Shard", "Dust Core", "Hardened Metal Plate", "Runic Essence",
+                        "Ember Dust", "Luminite Powder"}
 
 -- Anti AFK Function
 local function performAntiAFK()
 	if not antiAFKEnabled then return end
 	
+	-- Simulate user input to prevent AFK kick
 	VirtualUser:CaptureController()
 	VirtualUser:ClickButton2(Vector2.new())
 	
 	actionCount = actionCount + 1
 	lastAction = tick()
 	
+	-- Optional: Move character slightly
 	if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
 		local humanoid = LocalPlayer.Character.Humanoid
 		if humanoid.MoveDirection == Vector3.new(0, 0, 0) then
+			-- Character is idle, send a small movement
 			humanoid:Move(Vector3.new(0.01, 0, 0))
 			wait(0.1)
 			humanoid:Move(Vector3.new(0, 0, 0))
@@ -172,13 +141,14 @@ local function getHumanoid()
     return char and char:FindFirstChild("Humanoid")
 end
 
-local flying = false
+-- Noclip Function (only active during flying)
+local isFlying = false
 
 local function enableNoclip()
     if noclipConnection then return end
-    flying = true
+    isFlying = true
     noclipConnection = RunService.Stepped:Connect(function()
-        if flying then
+        if isFlying then
             local char = getCharacter()
             if char then
                 for _, part in pairs(char:GetDescendants()) do
@@ -192,7 +162,7 @@ local function enableNoclip()
 end
 
 local function disableNoclip()
-    flying = false
+    isFlying = false
     if noclipConnection then
         noclipConnection:Disconnect()
         noclipConnection = nil
@@ -207,195 +177,44 @@ local function disableNoclip()
     end
 end
 
--- Tool Activation via ToolService
-local function activateTool()
-    pcall(function()
-        Services.Tool.RF.ToolActivated:InvokeServer()
-    end)
-end
-
--- Auto tool loop connections
-local miningToolConnection = nil
-local killToolConnection = nil
-
--- Ghost Tap Variables
-local ghostTapEnabled = false
-local ghostTapSpeed = 10 -- Default: 10 taps per second
-local ghostTapConnection = nil
-
-local function performGhostTap()
-    local camera = workspace.CurrentCamera
-    if not camera then return end
-    
-    local screenSize = camera.ViewportSize
-    local centerX = screenSize.X / 2
-    local centerY = screenSize.Y / 2
-    
-    -- Simulate tap at screen center
-    VirtualInputManager:SendMouseButtonEvent(centerX, centerY, 0, true, game, 0)
-    task.wait(0.01) -- Small delay
-    VirtualInputManager:SendMouseButtonEvent(centerX, centerY, 0, false, game, 0)
-end
-
-local function startGhostTap()
-    if ghostTapConnection then return end
-    
-    ghostTapConnection = RunService.Heartbeat:Connect(function()
-        if ghostTapEnabled then
-            performGhostTap()
-            task.wait(1 / ghostTapSpeed) -- Delay based on taps per second
+-- Auto Tap Functions for Mining
+local function startMiningTap()
+    if miningTapConnection then
+        miningTapConnection:Disconnect()
+    end
+    miningTapConnection = RunService.Heartbeat:Connect(function()
+        if autoMining then
+            activateTool()
+            task.wait(0.05) -- Small delay between taps
         end
     end)
 end
 
-local function stopGhostTap()
-    if ghostTapConnection then
-        ghostTapConnection:Disconnect()
-        ghostTapConnection = nil
+local function stopMiningTap()
+    if miningTapConnection then
+        miningTapConnection:Disconnect()
+        miningTapConnection = nil
     end
 end
 
-local function startMiningTool()
-    if miningToolConnection then miningToolConnection:Disconnect() end
-    
-    miningToolConnection = RunService.Heartbeat:Connect(function()
-        if not autoMining then return end
-        if isUIVisible then return end
-        
-        local ore = findNearestOre()
-        if ore then
-            local hrp = getHumanoidRootPart()
-            if hrp and ore then
-                local dist = (hrp.Position - ore.Position).Magnitude
-                if dist <= miningRange then
-                    equipPickaxe()
-                    activateTool()
-                end
-            end
+-- Auto Tap Functions for Killing
+local function startKillTap()
+    if killTapConnection then
+        killTapConnection:Disconnect()
+    end
+    killTapConnection = RunService.Heartbeat:Connect(function()
+        if autoKillZombie then
+            activateTool()
+            task.wait(0.05) -- Small delay between taps
         end
     end)
 end
 
-local function stopMiningTool()
-    if miningToolConnection then
-        miningToolConnection:Disconnect()
-        miningToolConnection = nil
+local function stopKillTap()
+    if killTapConnection then
+        killTapConnection:Disconnect()
+        killTapConnection = nil
     end
-end
-
-local function startKillTool()
-    if killToolConnection then killToolConnection:Disconnect() end
-    
-    killToolConnection = RunService.Heartbeat:Connect(function()
-        if not autoKillZombie then return end
-        if isUIVisible then return end
-        
-        if currentTarget then
-            local hrp = getHumanoidRootPart()
-            local mobHrp = currentTarget:FindFirstChild("HumanoidRootPart")
-            if hrp and mobHrp then
-                local dist = (hrp.Position - mobHrp.Position).Magnitude
-                if dist <= 10 then
-                    equipWeapon()
-                    activateTool()
-                end
-            end
-        end
-    end)
-end
-
-local function stopKillTool()
-    if killToolConnection then
-        killToolConnection:Disconnect()
-        killToolConnection = nil
-    end
-end
-
-local function equipPickaxe()
-    local char = getCharacter()
-    if not char then return false end
-    
-    -- Check if already holding pickaxe
-    local cur = char:FindFirstChildOfClass("Tool")
-    if cur then
-        local n = cur.Name:lower()
-        if n:find("pick") or n:find("drill") or n:find("mine") then
-            return true
-        end
-    end
-    
-    -- Try to find and equip pickaxe from backpack
-    local bp = LocalPlayer:FindFirstChild("Backpack")
-    if bp then
-        for _, t in pairs(bp:GetChildren()) do
-            if t:IsA("Tool") then
-                local n = t.Name:lower()
-                if n:find("pick") or n:find("drill") or n:find("mine") then
-                    -- Try using game's Character service first
-                    local success = pcall(function()
-                        Services.Character.RF.EquipItem:InvokeServer(t.Name)
-                    end)
-                    if success then
-                        task.wait(0.1)
-                        return true
-                    end
-                    
-                    -- Fallback to Humanoid:EquipTool
-                    local h = getHumanoid()
-                    if h then
-                        h:EquipTool(t)
-                        task.wait(0.1)
-                        return true
-                    end
-                end
-            end
-        end
-    end
-    return false
-end
-
-local function equipWeapon()
-    local char = getCharacter()
-    if not char then return false end
-    
-    -- Check if already holding weapon
-    local cur = char:FindFirstChildOfClass("Tool")
-    if cur then
-        local n = cur.Name:lower()
-        if not n:find("pick") and (n:find("sword") or n:find("blade") or n:find("axe") or n:find("hammer") or n:find("spear") or n:find("dagger") or n:find("weapon")) then
-            return true
-        end
-    end
-    
-    -- Try to find and equip weapon from backpack
-    local bp = LocalPlayer:FindFirstChild("Backpack")
-    if bp then
-        for _, t in pairs(bp:GetChildren()) do
-            if t:IsA("Tool") then
-                local n = t.Name:lower()
-                -- Weapon keywords, exclude pickaxe
-                if not n:find("pick") and not n:find("drill") and (n:find("sword") or n:find("blade") or n:find("axe") or n:find("hammer") or n:find("spear") or n:find("dagger") or n:find("weapon")) then
-                    -- Try using game's Character service first
-                    local success = pcall(function()
-                        Services.Character.RF.EquipItem:InvokeServer(t.Name)
-                    end)
-                    if success then
-                        task.wait(0.1)
-                        return true
-                    end
-                    
-                    -- Fallback to Humanoid:EquipTool
-                    local h = getHumanoid()
-                    if h then
-                        h:EquipTool(t)
-                        task.wait(0.1)
-                        return true
-                    end
-                end
-            end
-        end
-    end
-    return false
 end
 
 local function findNearestOre()
@@ -407,20 +226,24 @@ local function findNearestOre()
     
     for _, obj in pairs(workspace:GetDescendants()) do
         if obj:IsA("Model") then
-            local n = obj.Name:lower()
-            -- Skip tools and equipment
-            if n:find("pickaxe") or n:find("sword") or n:find("weapon") or n:find("tool") or n:find("stonewakes") then
-                continue
+            local isOre = false
+            
+            -- Check if matches selected ore (when not "All")
+            if selectedOre ~= "All" and selectedOre ~= "None" then
+                if obj.Name:find(selectedOre) then
+                    isOre = true
+                end
+            else
+                -- Check against ore names list for "All"
+                for _, oreName in pairs(oreNames) do
+                    if obj.Name:find(oreName) then
+                        isOre = true
+                        break
+                    end
+                end
             end
             
-            -- Skip player stuff
-            local p = obj.Parent
-            if p and (p.Name == LocalPlayer.Name or p:FindFirstChild("Humanoid")) then
-                continue
-            end
-            
-            -- Match selected ore
-            if obj.Name:find(selectedOre) then
+            if isOre then
                 local orePart = obj:FindFirstChild("Part") or obj:FindFirstChildWhichIsA("BasePart")
                 if orePart then
                     local distance = (hrp.Position - orePart.Position).Magnitude
@@ -436,58 +259,6 @@ local function findNearestOre()
     return nearestOre
 end
 
-local function findNearestSellNPC()
-    local hrp = getHumanoidRootPart()
-    if not hrp then return nil end
-    
-    local nearestNPC = nil
-    local nearestDistance = math.huge
-    
-    -- Prioritize Marbles as sell NPC
-    for _, npc in pairs(workspace:GetDescendants()) do
-        if npc:IsA("Model") and npc.Name == "Marbles" then
-            local npcHrp = npc:FindFirstChild("HumanoidRootPart") or npc:FindFirstChildWhichIsA("BasePart")
-            if npcHrp then
-                local distance = (hrp.Position - npcHrp.Position).Magnitude
-                if distance < nearestDistance and distance < 1000 then
-                    nearestDistance = distance
-                    nearestNPC = npc
-                end
-            end
-        end
-    end
-    
-    -- Fallback to other merchant NPCs if Marbles not found
-    if not nearestNPC then
-        local npcNames = {"Merchant", "Shop", "Trader", "Vendor", "Brakk", "Lira", "Oskar", "Tolin"}
-        
-        for _, npc in pairs(workspace:GetDescendants()) do
-            if npc:IsA("Model") then
-                local found = false
-                for _, name in pairs(npcNames) do
-                    if npc.Name:lower():find(name:lower()) then
-                        found = true
-                        break
-                    end
-                end
-                
-                if found then
-                    local npcHrp = npc:FindFirstChild("HumanoidRootPart") or npc:FindFirstChildWhichIsA("BasePart")
-                    if npcHrp then
-                        local distance = (hrp.Position - npcHrp.Position).Magnitude
-                        if distance < nearestDistance and distance < 1000 then
-                            nearestDistance = distance
-                            nearestNPC = npc
-                        end
-                    end
-                end
-            end
-        end
-    end
-    
-    return nearestNPC
-end
-
 local function findNearestZombie()
     local hrp = getHumanoidRootPart()
     if not hrp then return nil end
@@ -501,9 +272,20 @@ local function findNearestZombie()
             if npcHumanoid and npcHumanoid.Health > 0 then
                 local isEnemy = false
                 
-                -- Check for specific selected NPC only
-                if npc.Name:lower():find(selectedNPC:lower()) then
-                    isEnemy = true
+                -- Check if it's an enemy NPC
+                if selectedNPC == "All" then
+                    -- Check against common enemy names
+                    for _, enemyName in pairs(npcNames) do
+                        if npc.Name:lower():find(enemyName:lower()) then
+                            isEnemy = true
+                            break
+                        end
+                    end
+                else
+                    -- Check for specific NPC
+                    if npc.Name:lower():find(selectedNPC:lower()) then
+                        isEnemy = true
+                    end
                 end
                 
                 if isEnemy then
@@ -523,85 +305,126 @@ local function findNearestZombie()
     return nearestZombie
 end
 
--- Anti-Cheat Bypass: Random delay generator
-local function getRandomDelay(min, max)
-    if not randomDelays then return min end
-    return math.random(min * 100, max * 100) / 100
-end
-
--- Anti-Cheat Bypass: Add random offset to position
-local function humanizePosition(pos)
-    if not humanizedSpeed then return pos end
-    local offset = Vector3.new(
-        math.random(-2, 2),
-        math.random(-1, 1),
-        math.random(-2, 2)
-    )
-    return pos + offset
-end
-
--- Anti-Cheat Bypass: Variable speed
-local function getHumanizedSpeed()
-    if not humanizedSpeed then return flySpeed end
-    return flySpeed + math.random(-5, 5)
-end
-
 local function tweenTo(targetPos, speed)
     local hrp = getHumanoidRootPart()
     if not hrp then return end
     
-    -- Add random offset to look more human
-    if useAntiCheat then
-        targetPos = humanizePosition(targetPos)
-        speed = getHumanizedSpeed()
-    end
-    
     local distance = (hrp.Position - targetPos).Magnitude
-    
-    -- Enable noclip for any distance movement or underground
-    if distance > 10 or targetPos.Y < 0 then
-        enableNoclip()
-    end
-    
-    -- Don't tween if too close (looks suspicious)
-    if distance < 5 then
-        hrp.CFrame = CFrame.new(targetPos)
-        if not autoMining and not autoKillZombie then
-            disableNoclip()
-        end
-        return
-    end
-    
     local duration = distance / speed
     
-    -- Add slight delay before starting tween
-    if useAntiCheat then
-        wait(getRandomDelay(0.1, 0.3))
-    end
+    enableNoclip()
     
     local TweenService = game:GetService("TweenService")
-    -- Use Sine easing for more natural movement
-    local easingStyle = useAntiCheat and Enum.EasingStyle.Sine or Enum.EasingStyle.Linear
-    
     local tween = TweenService:Create(
         hrp,
-        TweenInfo.new(duration, easingStyle),
+        TweenInfo.new(duration, Enum.EasingStyle.Linear),
         {CFrame = CFrame.new(targetPos)}
     )
     
     tween:Play()
     tween.Completed:Connect(function()
-        -- Don't disable noclip immediately if still farming
-        if not autoMining and not autoKillZombie then
-            disableNoclip()
-        end
-        -- Add small delay after arriving
-        if useAntiCheat then
-            wait(getRandomDelay(0.1, 0.2))
-        end
+        disableNoclip()
     end)
     
     return tween
+end
+
+local function activateTool()
+    local char = getCharacter()
+    if not char then return end
+    
+    local tool = char:FindFirstChildOfClass("Tool")
+    if not tool then return end
+    
+    -- Method 1: Use ToolService remote with tool name
+    pcall(function()
+        Services.Tool.RF.ToolActivated:InvokeServer(tool.Name)
+    end)
+    
+    -- Method 2: Direct tool activation as backup
+    pcall(function()
+        tool:Activate()
+    end)
+end
+
+local function equipPickaxe()
+    local char = getCharacter()
+    if not char then return false end
+    
+    -- Check if already equipped
+    local currentTool = char:FindFirstChildOfClass("Tool")
+    if currentTool and currentTool.Name:lower():find("pick") then
+        return true
+    end
+    
+    -- Method 1: Try backpack first for faster equipping
+    local backpack = LocalPlayer:FindFirstChild("Backpack")
+    if backpack then
+        for _, tool in pairs(backpack:GetChildren()) do
+            if tool:IsA("Tool") and tool.Name:lower():find("pick") then
+                local humanoid = getHumanoid()
+                if humanoid then
+                    humanoid:EquipTool(tool)
+                    task.wait(0.3)
+                    return true
+                end
+            end
+        end
+    end
+    
+    -- Method 2: Use ToolService remote with 'Pickaxe' parameter
+    pcall(function()
+        Services.Tool.RF.ToolActivated:InvokeServer("Pickaxe")
+    end)
+    
+    task.wait(0.5)
+    return char:FindFirstChildOfClass("Tool") ~= nil
+end
+
+local function equipWeapon()
+    local char = getCharacter()
+    if not char then return false end
+    
+    -- Check if already equipped
+    local currentTool = char:FindFirstChildOfClass("Tool")
+    if currentTool and (currentTool.Name:lower():find("sword") or 
+                        currentTool.Name:lower():find("blade") or 
+                        currentTool.Name:lower():find("axe") or 
+                        currentTool.Name:lower():find("hammer")) then
+        return true
+    end
+    
+    -- Method 1: Try backpack first for faster equipping
+    local backpack = LocalPlayer:FindFirstChild("Backpack")
+    if backpack then
+        for _, tool in pairs(backpack:GetChildren()) do
+            if tool:IsA("Tool") and (tool.Name:lower():find("sword") or 
+                                     tool.Name:lower():find("blade") or 
+                                     tool.Name:lower():find("axe") or 
+                                     tool.Name:lower():find("hammer")) then
+                local humanoid = getHumanoid()
+                if humanoid then
+                    humanoid:EquipTool(tool)
+                    task.wait(0.3)
+                    return true
+                end
+            end
+        end
+    end
+    
+    -- Method 2: Use ToolService remote with 'Weapon' parameter
+    pcall(function()
+        Services.Tool.RF.ToolActivated:InvokeServer("Weapon")
+    end)
+    
+    task.wait(0.5)
+    return char:FindFirstChildOfClass("Tool") ~= nil
+end
+
+local function forge(target)
+    pcall(function()
+        Services.Proximity.RF.Forge:InvokeServer(target)
+    end)
 end
 
 local function openDialogue(npc)
@@ -616,26 +439,107 @@ local function runDialogueCommand(command)
     end)
 end
 
--- Auto Functions
-local lastMine = 0
-local cd = 0.5
+local function getPlayerEquipment()
+    local success, result = pcall(function()
+        return Services.Status.RF.GetPlayerEquipmentInfo:InvokeServer()
+    end)
+    return success and result or nil
+end
 
+local function findNearestSellNPC()
+    local hrp = getHumanoidRootPart()
+    if not hrp then return nil end
+    
+    local nearestNPC = nil
+    local nearestDistance = math.huge
+    
+    -- NPC names from list
+    local npcNames = {"Brakk", "Lira", "Oskar", "Tolin", "Mira", "Kaen", "Sela", "Drax", "Fynn", "Valeen", 
+                      "Rudo", "Elwyn", "Jarrick", "Nora", "Taro", "Garm", "Vella", "Kard", "Myra", "Thorne"}
+    
+    for _, npc in pairs(workspace:GetDescendants()) do
+        if npc:IsA("Model") then
+            local found = npc.Name:lower():find("merchant") or npc.Name:lower():find("shop") or npc.Name:lower():find("sell")
+            if not found then
+                for _, name in pairs(npcNames) do
+                    if npc.Name:find(name) then
+                        found = true
+                        break
+                    end
+                end
+            end
+            
+            if found then
+                local npcHrp = npc:FindFirstChild("HumanoidRootPart") or npc:FindFirstChildWhichIsA("BasePart")
+                if npcHrp then
+                    local distance = (hrp.Position - npcHrp.Position).Magnitude
+                    if distance < nearestDistance and distance < 1000 then
+                        nearestDistance = distance
+                        nearestNPC = npc
+                    end
+                end
+            end
+        end
+    end
+    
+    return nearestNPC
+end
+
+local function findNearestForgeStation()
+    local hrp = getHumanoidRootPart()
+    if not hrp then return nil end
+    
+    local nearestForge = nil
+    local nearestDistance = math.huge
+    
+    -- Check workspace for forge stations
+    for _, obj in pairs(workspace:GetDescendants()) do
+        if obj:IsA("Model") or obj:IsA("Part") then
+            local isForge = false
+            
+            -- Check common forge names
+            if obj.Name:lower():find("forge") or obj.Name:lower():find("anvil") or 
+               obj.Name:lower():find("craft") or obj.Name:lower():find("furnace") or
+               obj.Name:lower():find("smithing") or obj.Name:lower():find("workbench") then
+                isForge = true
+            end
+            
+            if isForge then
+                local forgePart = obj:IsA("Part") and obj or obj:FindFirstChild("Part") or obj:FindFirstChildWhichIsA("BasePart")
+                if forgePart then
+                    local distance = (hrp.Position - forgePart.Position).Magnitude
+                    if distance < nearestDistance and distance < 1000 then
+                        nearestDistance = distance
+                        nearestForge = obj
+                    end
+                end
+            end
+        end
+    end
+    
+    return nearestForge
+end
+
+-- Auto Mining Function
 local function startAutoMining()
     if farmConnection then
         farmConnection:Disconnect()
     end
     
-    startMiningTool()
-    equipPickaxe()
+    -- Stop kill tapping first
+    stopKillTap()
+    
+    -- Equip pickaxe immediately
+    task.spawn(function()
+        task.wait(0.2)
+        equipPickaxe()
+    end)
+    
+    -- Start mining tap
+    startMiningTap()
     
     farmConnection = RunService.Heartbeat:Connect(function()
         if not autoMining then return end
-        
-        local t = tick()
-        if t - lastMine < cd then return end
-        
-        -- Keep pickaxe equipped
-        equipPickaxe()
         
         local ore = findNearestOre()
         if ore then
@@ -643,19 +547,28 @@ local function startAutoMining()
             if hrp then
                 local distance = (hrp.Position - ore.Position).Magnitude
                 
-                if distance > 300 then return end
-                
                 if distance > miningRange then
-                    local targetPos = ore.Position + Vector3.new(0, 3, 0)
-                    tweenTo(targetPos, flySpeed)
+                    -- Fly to ore
+                    tweenTo(ore.Position + Vector3.new(0, 3, 0), flySpeed)
+                else
+                    -- Stop at ore and ensure pickaxe equipped
+                    local char = getCharacter()
+                    if char then
+                        local currentTool = char:FindFirstChildOfClass("Tool")
+                        if not currentTool or not currentTool.Name:lower():find("pick") then
+                            equipPickaxe()
+                            task.wait(0.2)
+                        end
+                    end
+                    
+                    -- Mine the ore
+                    forge(ore.Parent)
+                    
+                    -- Increment stats if ore exists
+                    if ore and ore.Parent then
+                        statsCollected = statsCollected + 1
+                    end
                 end
-                
-                pcall(function()
-                    Services.Proximity.RF.Forge:InvokeServer(ore.Parent)
-                end)
-                
-                statsCollected = statsCollected + 1
-                lastMine = t
             end
         end
         
@@ -663,6 +576,87 @@ local function startAutoMining()
     end)
 end
 
+-- Auto Kill Zombie Function
+local currentTarget = nil
+
+local function startAutoKill()
+    if killConnection then
+        killConnection:Disconnect()
+    end
+    
+    currentTarget = nil
+    
+    -- Stop mining tapping first
+    stopMiningTap()
+    
+    -- Equip weapon immediately
+    task.spawn(function()
+        task.wait(0.2)
+        equipWeapon()
+    end)
+    
+    -- Start kill tap
+    startKillTap()
+    
+    killConnection = RunService.Heartbeat:Connect(function()
+        if not autoKillZombie then return end
+        
+        -- Check if current target is still valid
+        if currentTarget then
+            local targetHumanoid = currentTarget:FindFirstChild("Humanoid")
+            if not targetHumanoid or targetHumanoid.Health <= 0 or not currentTarget.Parent then
+                -- Target dead, increment counter
+                if targetHumanoid and targetHumanoid.Health <= 0 then
+                    zombiesKilled = zombiesKilled + 1
+                end
+                currentTarget = nil
+            end
+        end
+        
+        -- Find new target
+        if not currentTarget then
+            currentTarget = findNearestZombie()
+        end
+        
+        -- Attack target
+        if currentTarget then
+            local hrp = getHumanoidRootPart()
+            local zombieHrp = currentTarget:FindFirstChild("HumanoidRootPart")
+            local zombieHumanoid = currentTarget:FindFirstChild("Humanoid")
+            
+            if hrp and zombieHrp and zombieHumanoid and zombieHumanoid.Health > 0 then
+                local distance = (hrp.Position - zombieHrp.Position).Magnitude
+                
+                if distance > 8 then
+                    -- Fly to zombie
+                    tweenTo(zombieHrp.Position + Vector3.new(0, 2, 0), flySpeed)
+                else
+                    -- Face and attack
+                    hrp.CFrame = CFrame.new(hrp.Position, zombieHrp.Position)
+                    
+                    -- Ensure weapon equipped
+                    local char = getCharacter()
+                    if char then
+                        local currentTool = char:FindFirstChildOfClass("Tool")
+                        if not currentTool or not (currentTool.Name:lower():find("sword") or 
+                                                    currentTool.Name:lower():find("blade") or 
+                                                    currentTool.Name:lower():find("axe") or 
+                                                    currentTool.Name:lower():find("hammer")) then
+                            equipWeapon()
+                            task.wait(0.2)
+                        end
+                    end
+                end
+            else
+                currentTarget = nil
+            end
+        end
+        
+        task.wait(0.2)
+    end)
+end
+
+-- Auto Sell Function
 local function startAutoSell()
     if sellConnection then
         sellConnection:Disconnect()
@@ -682,526 +676,129 @@ local function startAutoSell()
                 if distance > 10 then
                     tweenTo(npcPart.Position + Vector3.new(0, 3, 0), flySpeed)
                 else
-                    -- Stop and interact
-                    disableNoclip()
-                    
                     openDialogue(npc)
                     wait(0.5)
                     
-                    -- Sell items by category
-                    if selectedSellCategory == "All Items" then
+                    -- Sell specific item or all
+                    if selectedSellItem == "All Items" then
                         runDialogueCommand("Sell All")
                         runDialogueCommand("Sell")
                     else
-                        -- Sell by rarity category
-                        runDialogueCommand("Sell " .. selectedSellCategory)
+                        runDialogueCommand("Sell " .. selectedSellItem)
                     end
                     
                     itemsSold = itemsSold + 1
-                    
-                    if useAntiCheat then
-                        wait(getRandomDelay(1.0, 2.0))
-                    else
-                        wait(2)
-                    end
+                    wait(2)
                 end
             end
         end
         
-        wait(useAntiCheat and getRandomDelay(0.5, 1.0) or 0.5)
+        wait(1)
     end)
 end
 
--- Auto Forge Minigame
-local forgeMinigameConnection = nil
-local isForging = false
-
-local function completeForgeMinigame()
-    if isForging then return end
-    isForging = true
-    
-    task.wait(0.2)
-    
-    -- Auto Melt Phase
-    local meltAttempts = 0
-    while autoForgeEnabled and meltAttempts < 15 do
-        meltAttempts = meltAttempts + 1
-        
-        pcall(function()
-            Services.Forge.RF.ChangeSequence:InvokeServer("Melt")
-        end)
-        
-        task.wait(0.1)
-        
-        local forgeUI = LocalPlayer.PlayerGui:FindFirstChild("ForgeUI") or LocalPlayer.PlayerGui:FindFirstChild("Forge")
-        if not forgeUI or not forgeUI.Enabled then break end
-    end
-    
-    task.wait(0.15)
-    
-    -- Auto Pour Phase
-    local pourAttempts = 0
-    while autoForgeEnabled and pourAttempts < 15 do
-        pourAttempts = pourAttempts + 1
-        
-        pcall(function()
-            Services.Forge.RF.ChangeSequence:InvokeServer("Pour")
-        end)
-        
-        task.wait(0.1)
-        
-        local forgeUI = LocalPlayer.PlayerGui:FindFirstChild("ForgeUI") or LocalPlayer.PlayerGui:FindFirstChild("Forge")
-        if not forgeUI or not forgeUI.Enabled then break end
-    end
-    
-    task.wait(0.15)
-    
-    -- Auto Hammer Phase
-    local hammerAttempts = 0
-    while autoForgeEnabled and hammerAttempts < 15 do
-        hammerAttempts = hammerAttempts + 1
-        
-        pcall(function()
-            Services.Forge.RF.ChangeSequence:InvokeServer("Hammer")
-        end)
-        
-        task.wait(0.1)
-        
-        local forgeUI = LocalPlayer.PlayerGui:FindFirstChild("ForgeUI") or LocalPlayer.PlayerGui:FindFirstChild("Forge")
-        if not forgeUI or not forgeUI.Enabled then break end
-    end
-    
-    -- Complete forge
-    task.wait(0.2)
-    pcall(function()
-        Services.Forge.RF.EndForge:InvokeServer()
-    end)
-    
-    itemsForged = itemsForged + 1
-    isForging = false
-end
-
+-- Auto Forge Function
 local function startAutoForge()
-    if forgeMinigameConnection then
-        forgeMinigameConnection:Disconnect()
+    if forgeConnection then
+        forgeConnection:Disconnect()
     end
     
-    -- Listen for forge minigame start
-    forgeMinigameConnection = RunService.Heartbeat:Connect(function()
-        if not autoForgeEnabled then return end
+    forgeConnection = RunService.Heartbeat:Connect(function()
+        if not autoForge then return end
         
-        -- Check if forge UI is visible
-        local forgeUI = LocalPlayer.PlayerGui:FindFirstChild("ForgeUI") or LocalPlayer.PlayerGui:FindFirstChild("Forge")
-        if forgeUI and forgeUI.Enabled and not isForging then
-            completeForgeMinigame()
-        end
-    end)
-    
-    -- Also hook into forge service signal
-    pcall(function()
-        Services.Forge.RF.StartForge.OnClientInvoke = function()
-            if autoForgeEnabled then
-                task.spawn(completeForgeMinigame)
-            end
-        end
-    end)
-end
-
-local function stopAutoForge()
-    if forgeMinigameConnection then
-        forgeMinigameConnection:Disconnect()
-        forgeMinigameConnection = nil
-    end
-    isForging = false
-end
-
-local lastAttackTime = 0
-local attackCooldown = 0.3
-
-local function startAutoKill()
-    if killConnection then
-        killConnection:Disconnect()
-    end
-    
-    currentTarget = nil
-    startKillTool()
-    equipWeapon()
-    
-    killConnection = RunService.Heartbeat:Connect(function()
-        if not autoKillZombie then return end
-        
-        local t = tick()
-        if t - lastAttackTime < attackCooldown then return end
-        
-        -- Keep weapon equipped
-        equipWeapon()
-        
-        -- Check current target
-        if currentTarget then
-            local targetHumanoid = currentTarget:FindFirstChild("Humanoid")
-            if not targetHumanoid or targetHumanoid.Health <= 0 or not currentTarget.Parent then
-                if targetHumanoid and targetHumanoid.Health <= 0 then
-                    zombiesKilled = zombiesKilled + 1
-                end
-                currentTarget = nil
-            end
-        end
-        
-        -- Find new target
-        if not currentTarget then
-            currentTarget = findNearestZombie()
-        end
-        
-        if currentTarget then
+        local forgeStation = findNearestForgeStation()
+        if forgeStation then
             local hrp = getHumanoidRootPart()
-            local zombieHrp = currentTarget:FindFirstChild("HumanoidRootPart")
-            local zombieHumanoid = currentTarget:FindFirstChild("Humanoid")
+            local forgePart = forgeStation
             
-            if hrp and zombieHrp and zombieHumanoid and zombieHumanoid.Health > 0 then
-                local distance = (hrp.Position - zombieHrp.Position).Magnitude
-                
-                if distance > 200 then
-                    currentTarget = nil
-                    return
-                end
-                
-                if distance > 8 then
-                    local targetPos = zombieHrp.Position + Vector3.new(0, 3, 0)
-                    tweenTo(targetPos, flySpeed)
-                end
-                
-                -- Face target
-                hrp.CFrame = CFrame.new(hrp.Position, zombieHrp.Position)
-                
-                lastAttackTime = t
-            else
-                currentTarget = nil
+            -- Get the proper part if it's a model
+            if forgeStation:IsA("Model") then
+                forgePart = forgeStation:FindFirstChild("Part") or forgeStation:FindFirstChildWhichIsA("BasePart")
             end
+            
+            if hrp and forgePart then
+                local distance = (hrp.Position - forgePart.Position).Magnitude
+                
+                if distance > 15 then
+                    tweenTo(forgePart.Position + Vector3.new(0, 5, 0), flySpeed)
+                else
+                    -- Try multiple forge methods
+                    pcall(function()
+                        -- Method 1: Direct forge call
+                        Services.Proximity.RF.Forge:InvokeServer(forgeStation)
+                    end)
+                    
+                    wait(0.3)
+                    
+                    pcall(function()
+                        -- Method 2: Dialogue-based forge
+                        Services.Proximity.RF.Dialogue:InvokeServer(forgeStation)
+                    end)
+                    
+                    wait(0.5)
+                    
+                    pcall(function()
+                        -- Method 3: Run forge commands
+                        Services.Dialogue.RF.RunCommand:InvokeServer("Forge")
+                        Services.Dialogue.RF.RunCommand:InvokeServer("Craft")
+                        Services.Dialogue.RF.RunCommand:InvokeServer("Create")
+                    end)
+                    
+                    itemsForged = itemsForged + 1
+                    wait(3)
+                end
+            end
+        else
+            -- Debug: No forge station found
+            print("No forge station found nearby")
         end
         
-        task.wait(0.2)
+        wait(1)
     end)
 end
 
--- UI ELEMENTS
-
--- Info Tab
-Tabs.InfoTab:Section({
-	Title = "Welcome to The Forge Hub",
+-- Main Tab Content
+MainTab:AddSection({
+	Name = "Anti AFK Status"
 })
 
-Tabs.InfoTab:Paragraph{
-	Title = "About",
-	Desc = "Premium auto-farming script for The Forge game. Features include Auto Mining, Auto Kill, Auto Sell, Auto Forge, Ghost Tap, and Anti-AFK protection. Made by Mons."
-}
+MainTab:AddParagraph("About Anti AFK", "This feature prevents Roblox from kicking you after 20 minutes of inactivity. The script simulates user input every few minutes to keep you active.")
 
-Tabs.InfoTab:Paragraph{
-	Title = "Features",
-	Desc = "✓ Auto Mining (12 ore types)\n✓ Auto Kill (16 mob types)\n✓ Auto Sell (rarity-based)\n✓ Auto Forge (Melt/Pour/Hammer)\n✓ Ghost Tap (1-30 taps/sec)\n✓ Anti-AFK Bypass"
-}
+MainTab:AddParagraph("Status", "Anti AFK is currently disabled.")
 
-Tabs.InfoTab:Section({
-	Title = "Support & Updates",
-})
-
-Tabs.InfoTab:Button({
-	Title = "Join Discord",
-	Desc = "Get support, updates, and join our community",
-	Callback = function()
-		setclipboard("discord.gg/nathub")
-		game.StarterGui:SetCore("SendNotification", {
-			Title = "Discord";
-			Text = "Link copied to clipboard!";
-			Duration = 3;
-		})
-	end
-})
-
-Tabs.InfoTab:Paragraph{
-	Title = "How to Use",
-	Desc = "1. Enable desired features in Farm/Combat tabs\n2. Adjust speed and range settings\n3. Enable Ghost Tap for faster farming\n4. Enable Anti-AFK to prevent disconnects\n5. Press Right Control to minimize UI"
-}
-
--- Farm Tab
-Tabs.FarmTab:Section({
-	Title = "Auto Mining Configuration",
-})
-
-Tabs.FarmTab:Paragraph{
-	Title = "About Auto Mining",
-	Desc = "Automatically flies to selected ore type and mines them. Supports 12 different ore types including Rock, Earth Crystal, Basalt Rock, and more. Enable Ghost Tap below for faster mining."
-}
-
-Tabs.FarmTab:Dropdown({
-	Title = "Select Ore Type",
-	Values = oreNames,
-	Value = "Stone",
-	Callback = function(value)
-		selectedOre = value
-	end
-})
-
-Tabs.FarmTab:Toggle({
-	Title = "Enable Auto Mining",
-	Icon = "pickaxe",
+-- Anti AFK Toggle
+MainTab:AddToggle({
+	Name = "Enable Anti AFK",
 	Default = false,
-	Callback = function(state)
-		autoMining = state
-		
-		if state then
-			startAutoMining()
-		else
-			if farmConnection then
-				farmConnection:Disconnect()
-				farmConnection = nil
-			end
-			disableNoclip()
-			stopMiningTool()
-		end
-	end
-})
-
-Tabs.FarmTab:Slider({
-	Title = "Fly Speed",
-	Value = {
-		Min = 10,
-		Max = 100,
-		Default = 30,
-	},
-	Callback = function(value)
-		flySpeed = value
-	end
-})
-
-Tabs.FarmTab:Slider({
-	Title = "Mining Range",
-	Value = {
-		Min = 5,
-		Max = 50,
-		Default = 15,
-	},
-	Callback = function(value)
-		miningRange = value
-	end
-})
-
-Tabs.FarmTab:Section({
-	Title = "Ghost Tap Enhancement",
-})
-
-Tabs.FarmTab:Paragraph{
-	Title = "Ghost Tap for Mining",
-	Desc = "Automatically taps screen center at adjustable speed while mining. Increases mining efficiency. Adjust speed from 1-30 taps per second. Higher speed = faster farming but may be detectable."
-}
-
-Tabs.FarmTab:Slider({
-	Title = "Tap Speed (per second)",
-	Value = {
-		Min = 1,
-		Max = 30,
-		Default = 10,
-	},
-	Callback = function(value)
-		ghostTapSpeed = value
-	end
-})
-
-Tabs.FarmTab:Toggle({
-	Title = "Enable Ghost Tap",
-	Icon = "mouse-pointer",
-	Default = false,
-	Callback = function(state)
-		ghostTapEnabled = state
-		
-		if state then
-			startGhostTap()
-		else
-			stopGhostTap()
-		end
-	end
-})
-
-Tabs.FarmTab:Section({
-	Title = "Auto Sell Configuration",
-})
-
-Tabs.FarmTab:Paragraph{
-	Title = "About Auto Sell",
-	Desc = "Automatically flies to nearest merchant/shop and sells items based on selected rarity. Choose from Common, Uncommon, Rare, Epic, Legendary, or All Items. Helps manage inventory space."
-}
-
-Tabs.FarmTab:Dropdown({
-	Title = "Select Rarity to Sell",
-	Values = sellCategories,
-	Value = "All Items",
-	Callback = function(value)
-		selectedSellCategory = value
-	end
-})
-
-Tabs.FarmTab:Toggle({
-	Title = "Enable Auto Sell",
-	Icon = "dollar-sign",
-	Default = false,
-	Callback = function(state)
-		autoSell = state
-		
-		if state then
-			startAutoSell()
-		else
-			if sellConnection then
-				sellConnection:Disconnect()
-				sellConnection = nil
-			end
-			disableNoclip()
-		end
-	end
-})
-
-Tabs.FarmTab:Section({
-	Title = "Auto Tap Settings",
-})
-
-Tabs.FarmTab:Paragraph{
-	Title = "Ghost Tap System",
-	Desc = "Uses invisible clicks at screen center for better compatibility."
-}
-
-Tabs.FarmTab:Slider({
-	Title = "Tap Speed",
-	Value = {
-		Min = 0.05,
-		Max = 0.2,
-		Default = 0.08,
-	},
-	Callback = function(value)
-		tapDelay = value
-	end
-})
-
--- Combat Tab
-Tabs.CombatTab:Section({
-	Title = "Auto Kill Configuration",
-})
-
-Tabs.CombatTab:Paragraph{
-	Title = "About Auto Kill",
-	Desc = "Automatically detects, flies to, and kills selected mob type. Supports 16 different mob types including Delver Zombie, Deathaxe, Skeleton, Reaper, and more. Auto-equips weapon and uses continuous tool activation."
-}
-
-Tabs.CombatTab:Dropdown({
-	Title = "Select NPC Type",
-	Values = npcNames,
-	Value = "Zombie",
-	Callback = function(value)
-		selectedNPC = value
-	end
-})
-
-Tabs.CombatTab:Toggle({
-	Title = "Enable Auto Kill",
-	Icon = "sword",
-	Default = false,
-	Callback = function(state)
-		autoKillZombie = state
-		
-		if state then
-			startAutoKill()
-		else
-			if killConnection then
-				killConnection:Disconnect()
-				killConnection = nil
-			end
-			disableNoclip()
-			stopKillTool()
-			currentTarget = nil
-		end
-	end
-})
-
-Tabs.CombatTab:Section({
-	Title = "Ghost Tap Enhancement",
-})
-
-Tabs.CombatTab:Paragraph{
-	Title = "Ghost Tap for Combat",
-	Desc = "Automatically taps screen center during combat for faster attacks. Uses same speed setting configured in Farm tab (1-30 taps/sec). Enable for maximum DPS."
-}
-
-Tabs.CombatTab:Toggle({
-	Title = "Enable Ghost Tap (Combat)",
-	Icon = "mouse-pointer",
-	Default = false,
-	Callback = function(state)
-		ghostTapEnabled = state
-		
-		if state then
-			startGhostTap()
-		else
-			stopGhostTap()
-		end
-	end
-})
-
--- Misc Tab
-Tabs.MiscTab:Section({
-	Title = "Auto Forge System",
-})
-
-Tabs.MiscTab:Paragraph{
-	Title = "About Auto Forge",
-	Desc = "Automatically completes the forge minigame phases (Melt, Pour, Hammer) when you start forging. Each phase is attempted up to 15 times for guaranteed success. Works seamlessly with Auto Mining."
-}
-
-Tabs.MiscTab:Toggle({
-	Title = "Enable Auto Forge",
-	Icon = "flame",
-	Default = false,
-	Callback = function(state)
-		autoForgeEnabled = state
-		
-		if state then
-			startAutoForge()
-		else
-			stopAutoForge()
-		end
-	end
-})
-
-Tabs.MiscTab:Section({
-	Title = "Anti-AFK Protection",
-})
-
-Tabs.MiscTab:Paragraph{
-	Title = "About Anti-AFK",
-	Desc = "Prevents Roblox from automatically disconnecting you after 20 minutes of inactivity. Simulates user input every 60 seconds to keep your session active. Essential for long farming sessions."
-}
-
-Tabs.MiscTab:Toggle({
-	Title = "Enable Anti AFK",
-	Icon = "shield-check",
-	Default = false,
-	Callback = function(state)
+	Callback = function(state) 
 		antiAFKEnabled = state
 		
 		if state then
+			statusParagraph:SetDesc("Anti AFK is enabled. You will not be kicked for inactivity.")
+			
+			-- Start Anti AFK loop
 			if afkConnection then
 				afkConnection:Disconnect()
 			end
 			
-			afkConnection = RunService.Heartbeat:Connect(function()
+			-- Perform anti AFK action every 60 seconds
+			afkConnection = game:GetService("RunService").Heartbeat:Connect(function()
 				if tick() - lastAction >= 60 then
 					performAntiAFK()
 				end
 			end)
 			
+			-- Also hook into Idled event
 			LocalPlayer.Idled:connect(function()
 				if antiAFKEnabled then
 					VirtualUser:CaptureController()
 					VirtualUser:ClickButton2(Vector2.new())
 				end
 			end)
+			
 		else
+			statusParagraph:SetDesc("Anti AFK is currently disabled.")
+			
 			if afkConnection then
 				afkConnection:Disconnect()
 				afkConnection = nil
@@ -1210,90 +807,281 @@ Tabs.MiscTab:Toggle({
 	end
 })
 
-Tabs.MiscTab:Button({
-	Title = "Manual AFK Action",
-	Desc = "Trigger anti-AFK manually",
-	Callback = function()
+Tabs.MainTab:Section({
+	Title = "Statistics",
+})
+
+-- Statistics Display
+local statsText = Tabs.MainTab:Paragraph{
+	Title = "Session Statistics",
+	Desc = "Actions performed: 0\nLast action: Never"
+}
+
+-- Update stats every 5 seconds
+spawn(function()
+	while wait(5) do
+		if antiAFKEnabled then
+			local timeSince = math.floor(tick() - lastAction)
+			statsText:SetDesc(string.format("Actions performed: %d\nLast action: %d seconds ago", actionCount, timeSince))
+		end
+	end
+end)
+
+-- Manual Action Button
+Tabs.MainTab:Button({
+	Title = "Perform Manual Action",
+	Desc = "Manually trigger anti AFK action",
+	Callback = function() 
 		if antiAFKEnabled then
 			performAntiAFK()
 		end
 	end
 })
 
-Tabs.MiscTab:Section({
-	Title = "Testing & Utilities",
+-- Farm Tab
+Tabs.FarmTab:Section({
+    Title = "Auto Mining",
 })
 
-Tabs.MiscTab:Paragraph{
-	Title = "Debug Tools",
-	Desc = "Test individual features to ensure they're working correctly before enabling full automation."
+Tabs.FarmTab:Paragraph{
+    Title = "Auto Mining",
+    Desc = "Automatically fly to ores and mine them. Select specific ore type or mine all ores."
 }
 
-Tabs.MiscTab:Button({
-	Title = "Test Ghost Tap",
-	Desc = "Sends 5 test taps to verify tap system",
-	Callback = function()
-		for i = 1, 5 do
-			performGhostTap()
-			wait(0.1)
-		end
-		game:GetService("StarterGui"):SetCore("SendNotification", {
-			Title = "Ghost Tap Test";
-			Text = "Sent 5 test taps successfully!";
-			Duration = 3;
-		})
-	end
+Tabs.FarmTab:Dropdown({
+    Title = "Select Ore Type",
+    Values = (function()
+        local values = {"All"}
+        for _, ore in pairs(oreNames) do
+            table.insert(values, ore)
+        end
+        return values
+    end)(),
+    Value = "All",
+    Callback = function(value)
+        selectedOre = value
+    end
 })
 
-Tabs.MiscTab:Button({
-	Title = "Test Tool Activation",
-	Desc = "Test all tap methods",
-	Callback = function()
-		local char = getCharacter()
-		local tool = char and char:FindFirstChildOfClass("Tool")
-		
-		game:GetService("StarterGui"):SetCore("SendNotification", {
-			Title = "Tool Check";
-			Text = tool and "Tool equipped: "..tool.Name or "No tool equipped!";
-			Duration = 3;
-		})
-		
-		if tool then
-			activateTool()
-		end
-	end
+local miningToggle = Tabs.FarmTab:Toggle({
+    Title = "Enable Auto Mining",
+    Icon = "pickaxe",
+    Default = false,
+    Callback = function(state)
+        autoMining = state
+        
+        if state then
+            startAutoMining()
+        else
+            if farmConnection then
+                farmConnection:Disconnect()
+                farmConnection = nil
+            end
+            disableNoclip()
+            stopMiningTap()
+        end
+    end
 })
 
+Tabs.FarmTab:Slider({
+    Title = "Mining Range",
+    Value = {
+        Min = 5,
+        Max = 50,
+        Default = 20,
+    },
+    Callback = function(value)
+        miningRange = value
+    end
+})
+
+Tabs.FarmTab:Section({
+    Title = "Auto Sell",
+})
+
+Tabs.FarmTab:Paragraph{
+    Title = "Auto Sell Items",
+    Desc = "Automatically fly to merchant/shop NPC and sell your items. Select specific item or sell all."
+}
+
+Tabs.FarmTab:Dropdown({
+    Title = "Select Item to Sell",
+    Values = sellItemNames,
+    Value = "All Items",
+    Callback = function(value)
+        selectedSellItem = value
+    end
+})
+
+local sellToggle = Tabs.FarmTab:Toggle({
+    Title = "Enable Auto Sell",
+    Icon = "dollar-sign",
+    Default = false,
+    Callback = function(state)
+        autoSell = state
+        
+        if state then
+            startAutoSell()
+        else
+            if sellConnection then
+                sellConnection:Disconnect()
+                sellConnection = nil
+            end
+            disableNoclip()
+        end
+    end
+})
+
+Tabs.FarmTab:Button({
+    Title = "Sell Items Once",
+    Desc = "Manually sell items at nearest merchant",
+    Callback = function()
+        local npc = findNearestSellNPC()
+        if npc then
+            local npcPart = npc:FindFirstChild("HumanoidRootPart") or npc:FindFirstChildWhichIsA("BasePart")
+            if npcPart then
+                local hrp = getHumanoidRootPart()
+                if hrp then
+                    tweenTo(npcPart.Position, flySpeed)
+                    wait(2)
+                    openDialogue(npc)
+                    wait(0.5)
+                    runDialogueCommand("Sell")
+                end
+            end
+
+        end
+    end
+})
+
+Tabs.FarmTab:Section({
+    Title = "Auto Forge",
+})
+
+Tabs.FarmTab:Paragraph{
+    Title = "Auto Forge Items",
+    Desc = "Automatically fly to forge station and craft items."
+}
+
+local forgeToggle = Tabs.FarmTab:Toggle({
+    Title = "Enable Auto Forge",
+    Icon = "flame",
+    Default = false,
+    Callback = function(state)
+        autoForge = state
+        
+        if state then
+            startAutoForge()
+        else
+            if forgeConnection then
+                forgeConnection:Disconnect()
+                forgeConnection = nil
+            end
+            disableNoclip()
+        end
+    end
+})
+
+-- Combat Tab
+Tabs.CombatTab:Section({
+    Title = "Auto Kill",
+})
+
+Tabs.CombatTab:Paragraph{
+    Title = "Auto Kill NPC",
+    Desc = "Automatically detect and kill nearby NPCs/enemies. Select specific NPC type or kill all."
+}
+
+Tabs.CombatTab:Dropdown({
+    Title = "Select NPC Type",
+    Values = (function()
+        local values = {"All"}
+        for _, npc in pairs(npcNames) do
+            table.insert(values, npc)
+        end
+        return values
+    end)(),
+    Value = "All",
+    Callback = function(value)
+        selectedNPC = value
+    end
+})
+
+local killToggle = Tabs.CombatTab:Toggle({
+    Title = "Enable Auto Kill Zombie",
+    Icon = "sword",
+    Default = false,
+    Callback = function(state)
+        autoKillZombie = state
+        
+        if state then
+            startAutoKill()
+        else
+            if killConnection then
+                killConnection:Disconnect()
+                killConnection = nil
+            end
+            disableNoclip()
+            stopKillTap()
+        end
+    end
+})
+
+Tabs.CombatTab:Button({
+    Title = "Kill Nearest Zombie",
+    Desc = "Manually kill the nearest zombie",
+    Callback = function()
+        local zombie = findNearestZombie()
+        if zombie then
+            local zombieHrp = zombie:FindFirstChild("HumanoidRootPart")
+            if zombieHrp then
+                local hrp = getHumanoidRootPart()
+                if hrp then
+                    tweenTo(zombieHrp.Position, flySpeed)
+                end
+            end
+
+        end
+    end
+})
+
+-- Misc Tab
 Tabs.MiscTab:Section({
-	Title = "Player Settings",
+    Title = "Player Settings",
 })
 
 Tabs.MiscTab:Button({
-	Title = "Reset Stats",
-	Desc = "Reset all statistics",
-	Callback = function()
-		statsCollected = 0
-		zombiesKilled = 0
-		actionCount = 0
-		itemsSold = 0
-		itemsForged = 0
-		game:GetService("StarterGui"):SetCore("SendNotification", {
-			Title = "Stats Reset";
-			Text = "All statistics have been reset!";
-			Duration = 3;
-		})
-	end
+    Title = "Reset Stats",
+    Desc = "Reset collected stats and kills counter",
+    Callback = function()
+        statsCollected = 0
+        zombiesKilled = 0
+        actionCount = 0
+        itemsSold = 0
+        itemsForged = 0
+    end
 })
 
 Tabs.MiscTab:Button({
-	Title = "Teleport to Spawn",
-	Desc = "TP to spawn point",
-	Callback = function()
-		local hrp = getHumanoidRootPart()
-		if hrp then
-			hrp.CFrame = CFrame.new(0, 50, 0)
-		end
-	end
+    Title = "Check Equipment",
+    Desc = "Get player equipment information",
+    Callback = function()
+        local equipment = getPlayerEquipment()
+        if equipment then
+            print("Equipment Info:", equipment)
+        end
+    end
+})
+
+Tabs.MiscTab:Button({
+    Title = "Teleport to Spawn",
+    Desc = "Teleport back to spawn point",
+    Callback = function()
+        local hrp = getHumanoidRootPart()
+        if hrp then
+            hrp.CFrame = CFrame.new(0, 50, 0)
+        end
+    end
 })
 
 -- Info Tab
@@ -1302,63 +1090,47 @@ Tabs.InfoTab:Section({
 })
 
 Tabs.InfoTab:Paragraph{
-	Title = "The Forge Script v2.2",
-	Desc = "All-in-one farming script with anti-cheat protection."
-}
-
-Tabs.InfoTab:Paragraph{
-	Title = "Features",
-	Desc = "• Anti AFK bypass\n• Auto Mining with ore selection\n• Auto Kill with NPC selection\n• Anti-cheat protection\n• Humanized movements\n• Auto-tap system (4 methods)\n• Session statistics tracking"
+	Title = "Hi",
+	Desc = "Version: 2.0\nGame ID: 76558904092080\n\nAll-in-one script with Anti AFK, Auto Mining, and Auto Kill features."
 }
 
 Tabs.InfoTab:Section({
 	Title = "Statistics",
 })
 
-local statsLabel = Tabs.InfoTab:Paragraph{
-	Title = "Session Stats",
-	Desc = " Ores: 0 | Kills: 0"
+local allStatsText = Tabs.InfoTab:Paragraph{
+	Title = "Session Statistics",
+	Desc = "Anti AFK Actions: 0\nOres Collected: 0\nZombies Killed: 0\nItems Sold: 0\nItems Forged: 0"
 }
 
+-- Update all stats
 spawn(function()
-	while wait(5) do
-		pcall(function()
-			statsLabel:SetDesc("AFK Actions: "..actionCount.." | Ores: "..statsCollected.." | Kills: "..zombiesKilled)
-		end)
+	while wait(2) do
+		allStatsText:SetDesc(string.format("Anti AFK Actions: %d\nOres Collected: %d\nZombies Killed: %d\nItems Sold: %d\nItems Forged: %d", actionCount, statsCollected, zombiesKilled, itemsSold, itemsForged))
 	end
 end)
 
--- UI Toggle Detection (for auto tap)
-local UserInputService = game:GetService("UserInputService")
-local ToggleKey = Enum.KeyCode.RightShift -- Default toggle key for NatHub
+Tabs.InfoTab:Section({
+	Title = "Features",
+})
 
--- Detect UI visibility changes
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if input.KeyCode == ToggleKey and not gameProcessed then
-        isUIVisible = not isUIVisible
-        
-        -- Debug notification (optional - can be removed)
-        if isUIVisible then
-            print("UI Opened - Auto Tap Paused")
-        else
-            print("UI Closed - Auto Tap Active")
-        end
-    end
-end)
+Tabs.InfoTab:Paragraph{
+	Title = "Complete Feature List",
+	Desc = "• Anti AFK with auto input simulation\n• Auto Mining with noclip & auto-tap\n• Auto Kill NPC with weapon & auto-tap\n• Auto Sell to Merchant/Shop\n• Auto Forge crafting\n• Fixed fly speed (50)\n• Noclip enabled during farming\n• Session statistics\n• Remote service integration"
+}
 
--- Alternative: Monitor ScreenGui visibility
-spawn(function()
-    while wait(0.5) do
-        pcall(function()
-            local playerGui = game.Players.LocalPlayer:WaitForChild("PlayerGui")
-            local natHubGui = playerGui:FindFirstChild("NatHub") or playerGui:FindFirstChild("ScreenGui")
-            
-            if natHubGui then
-                local mainFrame = natHubGui:FindFirstChildWhichIsA("Frame", true)
-                if mainFrame and mainFrame.Visible ~= nil then
-                    isUIVisible = mainFrame.Visible
-                end
-            end
-        end)
-    end
-end)
+Tabs.InfoTab:Paragraph{
+	Title = "Remote Services Used",
+	Desc = "• ToolService (Tool activation)\n• CharacterService (Equip items)\n• ProximityService (Dialogue, Forge)\n• DialogueService (Run commands)\n• StatusService (Equipment info)\n• All official game services"
+}
+
+-- Load notification
+NatHub:Notify({
+	Title = "NatHub",
+	Content = "Script loaded successfully!",
+	Icon = "check-circle",
+	Duration = 3,
+})
+
+print("NatHub script loaded successfully!")
+
