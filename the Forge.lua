@@ -1,6 +1,7 @@
 
 
 local VirtualUser = game:GetService("VirtualUser")
+local VirtualInputManager = game:GetService("VirtualInputManager")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -40,7 +41,7 @@ local Window = NatHub:CreateWindow({
 	Title = "Nathub",
 	Icon = "rbxassetid://113216930555884",
 	Author = "By Mons",
-	Folder = "TheForgeHub",
+	Folder = "TheForge",
 	Size = UDim2.fromOffset(580, 460),
 	LiveSearchDropdown = true,
     AutoSave = true,
@@ -217,6 +218,43 @@ end
 local miningToolConnection = nil
 local killToolConnection = nil
 
+-- Ghost Tap Variables
+local ghostTapEnabled = false
+local ghostTapSpeed = 10 -- Default: 10 taps per second
+local ghostTapConnection = nil
+
+local function performGhostTap()
+    local camera = workspace.CurrentCamera
+    if not camera then return end
+    
+    local screenSize = camera.ViewportSize
+    local centerX = screenSize.X / 2
+    local centerY = screenSize.Y / 2
+    
+    -- Simulate tap at screen center
+    VirtualInputManager:SendMouseButtonEvent(centerX, centerY, 0, true, game, 0)
+    task.wait(0.01) -- Small delay
+    VirtualInputManager:SendMouseButtonEvent(centerX, centerY, 0, false, game, 0)
+end
+
+local function startGhostTap()
+    if ghostTapConnection then return end
+    
+    ghostTapConnection = RunService.Heartbeat:Connect(function()
+        if ghostTapEnabled then
+            performGhostTap()
+            task.wait(1 / ghostTapSpeed) -- Delay based on taps per second
+        end
+    end)
+end
+
+local function stopGhostTap()
+    if ghostTapConnection then
+        ghostTapConnection:Disconnect()
+        ghostTapConnection = nil
+    end
+end
+
 local function startMiningTool()
     if miningToolConnection then miningToolConnection:Disconnect() end
     
@@ -279,19 +317,34 @@ local function equipPickaxe()
     
     -- Check if already holding pickaxe
     local cur = char:FindFirstChildOfClass("Tool")
-    if cur and (cur.Name:lower():find("pick") or cur.Name:lower():find("drill")) then
-        return true
+    if cur then
+        local n = cur.Name:lower()
+        if n:find("pick") or n:find("drill") or n:find("mine") then
+            return true
+        end
     end
     
+    -- Try to find and equip pickaxe from backpack
     local bp = LocalPlayer:FindFirstChild("Backpack")
     if bp then
         for _, t in pairs(bp:GetChildren()) do
             if t:IsA("Tool") then
                 local n = t.Name:lower()
                 if n:find("pick") or n:find("drill") or n:find("mine") then
+                    -- Try using game's Character service first
+                    local success = pcall(function()
+                        Services.Character.RF.EquipItem:InvokeServer(t.Name)
+                    end)
+                    if success then
+                        task.wait(0.1)
+                        return true
+                    end
+                    
+                    -- Fallback to Humanoid:EquipTool
                     local h = getHumanoid()
                     if h then
                         h:EquipTool(t)
+                        task.wait(0.1)
                         return true
                     end
                 end
@@ -309,21 +362,33 @@ local function equipWeapon()
     local cur = char:FindFirstChildOfClass("Tool")
     if cur then
         local n = cur.Name:lower()
-        if n:find("sword") or n:find("blade") or n:find("axe") or n:find("hammer") or n:find("spear") or n:find("dagger") then
+        if not n:find("pick") and (n:find("sword") or n:find("blade") or n:find("axe") or n:find("hammer") or n:find("spear") or n:find("dagger") or n:find("weapon")) then
             return true
         end
     end
     
+    -- Try to find and equip weapon from backpack
     local bp = LocalPlayer:FindFirstChild("Backpack")
     if bp then
         for _, t in pairs(bp:GetChildren()) do
             if t:IsA("Tool") then
                 local n = t.Name:lower()
                 -- Weapon keywords, exclude pickaxe
-                if not n:find("pick") and (n:find("sword") or n:find("blade") or n:find("axe") or n:find("hammer") or n:find("spear") or n:find("dagger") or n:find("weapon")) then
+                if not n:find("pick") and not n:find("drill") and (n:find("sword") or n:find("blade") or n:find("axe") or n:find("hammer") or n:find("spear") or n:find("dagger") or n:find("weapon")) then
+                    -- Try using game's Character service first
+                    local success = pcall(function()
+                        Services.Character.RF.EquipItem:InvokeServer(t.Name)
+                    end)
+                    if success then
+                        task.wait(0.1)
+                        return true
+                    end
+                    
+                    -- Fallback to Humanoid:EquipTool
                     local h = getHumanoid()
                     if h then
                         h:EquipTool(t)
+                        task.wait(0.1)
                         return true
                     end
                 end
@@ -822,17 +887,26 @@ end
 
 -- Info Tab
 Tabs.InfoTab:Section({
-	Title = "Welcome",
+	Title = "Welcome to The Forge Hub",
 })
 
 Tabs.InfoTab:Paragraph{
-	Title = "The Forge Hub",
-	Desc = "Auto farming script for The Forge. Made by Mons."
+	Title = "About",
+	Desc = "Premium auto-farming script for The Forge game. Features include Auto Mining, Auto Kill, Auto Sell, Auto Forge, Ghost Tap, and Anti-AFK protection. Made by Mons."
 }
+
+Tabs.InfoTab:Paragraph{
+	Title = "Features",
+	Desc = "✓ Auto Mining (12 ore types)\n✓ Auto Kill (16 mob types)\n✓ Auto Sell (rarity-based)\n✓ Auto Forge (Melt/Pour/Hammer)\n✓ Ghost Tap (1-30 taps/sec)\n✓ Anti-AFK Bypass"
+}
+
+Tabs.InfoTab:Section({
+	Title = "Support & Updates",
+})
 
 Tabs.InfoTab:Button({
 	Title = "Join Discord",
-	Desc = "Get support and updates",
+	Desc = "Get support, updates, and join our community",
 	Callback = function()
 		setclipboard("discord.gg/nathub")
 		game.StarterGui:SetCore("SendNotification", {
@@ -843,14 +917,19 @@ Tabs.InfoTab:Button({
 	end
 })
 
+Tabs.InfoTab:Paragraph{
+	Title = "How to Use",
+	Desc = "1. Enable desired features in Farm/Combat tabs\n2. Adjust speed and range settings\n3. Enable Ghost Tap for faster farming\n4. Enable Anti-AFK to prevent disconnects\n5. Press Right Control to minimize UI"
+}
+
 -- Farm Tab
 Tabs.FarmTab:Section({
-	Title = "Auto Mining",
+	Title = "Auto Mining Configuration",
 })
 
 Tabs.FarmTab:Paragraph{
-	Title = "Auto Mining",
-	Desc = "Automatically fly to ores and mine them."
+	Title = "About Auto Mining",
+	Desc = "Automatically flies to selected ore type and mines them. Supports 12 different ore types including Rock, Earth Crystal, Basalt Rock, and more. Enable Ghost Tap below for faster mining."
 }
 
 Tabs.FarmTab:Dropdown({
@@ -907,12 +986,48 @@ Tabs.FarmTab:Slider({
 })
 
 Tabs.FarmTab:Section({
-	Title = "Auto Sell",
+	Title = "Ghost Tap Enhancement",
 })
 
 Tabs.FarmTab:Paragraph{
-	Title = "Auto Sell Items",
-	Desc = "Automatically fly to merchant/shop NPC and sell your items."
+	Title = "Ghost Tap for Mining",
+	Desc = "Automatically taps screen center at adjustable speed while mining. Increases mining efficiency. Adjust speed from 1-30 taps per second. Higher speed = faster farming but may be detectable."
+}
+
+Tabs.FarmTab:Slider({
+	Title = "Tap Speed (per second)",
+	Value = {
+		Min = 1,
+		Max = 30,
+		Default = 10,
+	},
+	Callback = function(value)
+		ghostTapSpeed = value
+	end
+})
+
+Tabs.FarmTab:Toggle({
+	Title = "Enable Ghost Tap",
+	Icon = "mouse-pointer",
+	Default = false,
+	Callback = function(state)
+		ghostTapEnabled = state
+		
+		if state then
+			startGhostTap()
+		else
+			stopGhostTap()
+		end
+	end
+})
+
+Tabs.FarmTab:Section({
+	Title = "Auto Sell Configuration",
+})
+
+Tabs.FarmTab:Paragraph{
+	Title = "About Auto Sell",
+	Desc = "Automatically flies to nearest merchant/shop and sells items based on selected rarity. Choose from Common, Uncommon, Rare, Epic, Legendary, or All Items. Helps manage inventory space."
 }
 
 Tabs.FarmTab:Dropdown({
@@ -966,12 +1081,12 @@ Tabs.FarmTab:Slider({
 
 -- Combat Tab
 Tabs.CombatTab:Section({
-	Title = "Auto Kill",
+	Title = "Auto Kill Configuration",
 })
 
 Tabs.CombatTab:Paragraph{
-	Title = "Auto Kill NPC",
-	Desc = "Automatically detect and kill nearby NPCs/enemies."
+	Title = "About Auto Kill",
+	Desc = "Automatically detects, flies to, and kills selected mob type. Supports 16 different mob types including Delver Zombie, Deathaxe, Skeleton, Reaper, and more. Auto-equips weapon and uses continuous tool activation."
 }
 
 Tabs.CombatTab:Dropdown({
@@ -1004,14 +1119,38 @@ Tabs.CombatTab:Toggle({
 	end
 })
 
+Tabs.CombatTab:Section({
+	Title = "Ghost Tap Enhancement",
+})
+
+Tabs.CombatTab:Paragraph{
+	Title = "Ghost Tap for Combat",
+	Desc = "Automatically taps screen center during combat for faster attacks. Uses same speed setting configured in Farm tab (1-30 taps/sec). Enable for maximum DPS."
+}
+
+Tabs.CombatTab:Toggle({
+	Title = "Enable Ghost Tap (Combat)",
+	Icon = "mouse-pointer",
+	Default = false,
+	Callback = function(state)
+		ghostTapEnabled = state
+		
+		if state then
+			startGhostTap()
+		else
+			stopGhostTap()
+		end
+	end
+})
+
 -- Misc Tab
 Tabs.MiscTab:Section({
-	Title = "Auto Forge",
+	Title = "Auto Forge System",
 })
 
 Tabs.MiscTab:Paragraph{
-	Title = "Auto Forge Minigame",
-	Desc = "Automatically completes the forge minigame when you start forging."
+	Title = "About Auto Forge",
+	Desc = "Automatically completes the forge minigame phases (Melt, Pour, Hammer) when you start forging. Each phase is attempted up to 15 times for guaranteed success. Works seamlessly with Auto Mining."
 }
 
 Tabs.MiscTab:Toggle({
@@ -1030,12 +1169,12 @@ Tabs.MiscTab:Toggle({
 })
 
 Tabs.MiscTab:Section({
-	Title = "Anti AFK",
+	Title = "Anti-AFK Protection",
 })
 
 Tabs.MiscTab:Paragraph{
-	Title = "Anti AFK Bypass",
-	Desc = "Prevents Roblox from kicking you after 20 minutes of inactivity."
+	Title = "About Anti-AFK",
+	Desc = "Prevents Roblox from automatically disconnecting you after 20 minutes of inactivity. Simulates user input every 60 seconds to keep your session active. Essential for long farming sessions."
 }
 
 Tabs.MiscTab:Toggle({
@@ -1082,20 +1221,25 @@ Tabs.MiscTab:Button({
 })
 
 Tabs.MiscTab:Section({
-	Title = "Testing",
+	Title = "Testing & Utilities",
 })
+
+Tabs.MiscTab:Paragraph{
+	Title = "Debug Tools",
+	Desc = "Test individual features to ensure they're working correctly before enabling full automation."
+}
 
 Tabs.MiscTab:Button({
 	Title = "Test Ghost Tap",
-	Desc = "Test auto tap system",
+	Desc = "Sends 5 test taps to verify tap system",
 	Callback = function()
 		for i = 1, 5 do
-			activateTool()
+			performGhostTap()
 			wait(0.1)
 		end
 		game:GetService("StarterGui"):SetCore("SendNotification", {
 			Title = "Ghost Tap Test";
-			Text = "Sent 5 taps to screen center!";
+			Text = "Sent 5 test taps successfully!";
 			Duration = 3;
 		})
 	end
