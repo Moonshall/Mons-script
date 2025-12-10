@@ -21,7 +21,9 @@ local Services = {
 }
 
 -- Load NatUI Library
-local Window = require(NatHub["3e"]):CreateWindow({
+local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/dy1zn4t/bmF0dWk-/refs/heads/main/ui.lua"))()
+
+local Window = WindUI:CreateWindow({
 	Title = "The Forge - Auto Farm",
 	Icon = "rbxassetid://113216930555884",
 	Author = "NatHub Script",
