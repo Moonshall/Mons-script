@@ -37,7 +37,7 @@ if not success or not NatHub then
 end
 
 local Window = NatHub:CreateWindow({
-	Title = "Nathub",
+	Title = "The Forge Hub",
 	Icon = "rbxassetid://113216930555884",
 	Author = "By Mons",
 	Folder = "TheForgeHub",
@@ -45,6 +45,7 @@ local Window = NatHub:CreateWindow({
 	LiveSearchDropdown = true,
     AutoSave = true,
     FileSaveName = "TheForge_Config.json",
+    ShowMinimizeButton = true,
 })
 
 -- Track UI visibility with keybind
@@ -58,10 +59,10 @@ end)
 
 -- Create Tabs (NatHub format)
 local Tabs = {
-    InfoTab = Window:Tab({ Title = "Info", Icon = "info", Desc = "Information about the script." }),
-	FarmTab = Window:Tab({ Title = "Auto Farm", Icon = "pickaxe", Desc = "Auto mining and farming features." }),
-	CombatTab = Window:Tab({ Title = "Combat", Icon = "sword", Desc = "Auto kill zombie and combat features." }),
-	MiscTab = Window:Tab({ Title = "Misc", Icon = "settings", Desc = "Miscellaneous settings." }),
+    InfoTab = Window:Tab({ Title = "Info", Icon = "info", Desc = "Script information and statistics" }),
+	FarmTab = Window:Tab({ Title = "Farm", Icon = "activity", Desc = "Auto mining and farming" }),
+	CombatTab = Window:Tab({ Title = "Combat", Icon = "zap", Desc = "Auto kill mobs" }),
+	MiscTab = Window:Tab({ Title = "Misc", Icon = "settings", Desc = "Other features" }),
 }
 
 Window:SelectTab(1)
@@ -809,9 +810,22 @@ Tabs.InfoTab:Section({
 })
 
 Tabs.InfoTab:Paragraph{
-	Title = "The Forge Script",
-	Desc = "Advanced auto farming script for The Forge game with anti-detection features."
+	Title = "The Forge Hub v1.0",
+	Desc = "Advanced auto farming script with anti-detection features. Made by Mons for The Forge game."
 }
+
+Tabs.InfoTab:Button({
+	Title = "Join Discord",
+	Desc = "Get support and updates",
+	Callback = function()
+		setclipboard("discord.gg/yourserver")
+		game.StarterGui:SetCore("SendNotification", {
+			Title = "Discord";
+			Text = "Link copied to clipboard!";
+			Duration = 3;
+		})
+	end
+})
 
 Tabs.InfoTab:Section({
 	Title = "Statistics",
