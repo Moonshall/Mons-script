@@ -1,6 +1,4 @@
--- the forge auto farm
--- discord: mons#1234
--- v2.1
+
 
 local VirtualUser = game:GetService("VirtualUser")
 local Players = game:GetService("Players")
@@ -194,217 +192,54 @@ local function disableNoclip()
     end
 end
 
--- tap without cursor
-local function ghostTap()
-    -- direct tool call
-    pcall(function()
-        local tool = getCharacter():FindFirstChildOfClass("Tool")
-        if tool then
-            tool:Activate()
-        end
-    end)
-end
-
--- Mobile Touch Simulation (for mobile devices only)
-local function mobileTouch()
-    pcall(function()
-        local UserInputService = game:GetService("UserInputService")
-        -- Only use on mobile/touch devices
-        if UserInputService.TouchEnabled then
-            local VIM = game:GetService("VirtualInputManager")
-            local Camera = workspace.CurrentCamera
-            local ViewportSize = Camera.ViewportSize
-            
-            local touchX = ViewportSize.X / 2
-            local touchY = ViewportSize.Y / 2
-            
-            VIM:SendTouchEvent(0, touchX, touchY, true, game, 1)
-            task.wait(0.01)
-            VIM:SendTouchEvent(0, touchX, touchY, false, game, 1)
-        end
-    end)
-end
-
--- Tool Activation (No mouse cursor interference)
+-- Tool Activation via ToolService
 local function activateTool()
-    local char = getCharacter()
-    if not char then return end
-    
-    local tool = char:FindFirstChildOfClass("Tool")
-    if not tool then return end
-    
-    -- Method 1: Tool service remote (server-side activation)
     pcall(function()
         Services.Tool.RF.ToolActivated:InvokeServer()
     end)
-    
-    -- Method 2: Direct tool activation (client-side)
-    pcall(function()
-        tool:Activate()
-    end)
-    
-    -- Method 3: Tool's RemoteEvent/BindableEvent (if exists)
-    pcall(function()
-        -- Check for Activated event
-        if tool:FindFirstChild("Activated") then
-            tool.Activated:Fire()
-        end
-        
-        -- Check for RemoteEvent in tool descendants
-        for _, child in pairs(tool:GetDescendants()) do
-            if child:IsA("RemoteEvent") and (child.Name:lower():find("activate") or child.Name:lower():find("swing") or child.Name:lower():find("use")) then
-                child:FireServer()
-            end
-        end
-        
-        -- Check for BindableEvent
-        for _, child in pairs(tool:GetDescendants()) do
-            if child:IsA("BindableEvent") and (child.Name:lower():find("activate") or child.Name:lower():find("swing")) then
-                child:Fire()
-            end
-        end
-    end)
-    
-    -- Method 4: ContextActionService (doesn't use mouse)
-    pcall(function()
-        local ContextActionService = game:GetService("ContextActionService")
-        ContextActionService:BindAction("AutoTap", function()
-            tool:Activate()
-        end, false, Enum.KeyCode.Unknown)
-        ContextActionService:UnbindAction("AutoTap")
-    end)
-    
-    -- Method 5: Tool Handle manipulation (simulates swing)
-    pcall(function()
-        local handle = tool:FindFirstChild("Handle")
-        if handle and handle:IsA("BasePart") then
-            local originalCF = handle.CFrame
-            handle.CFrame = handle.CFrame * CFrame.Angles(math.rad(45), 0, 0)
-            task.wait(0.05)
-            handle.CFrame = originalCF
-        end
-    end)
-    
-    -- Method 6: Humanoid LoadAnimation (if tool has animation)
-    pcall(function()
-        local humanoid = getHumanoid()
-        if humanoid then
-            for _, child in pairs(tool:GetDescendants()) do
-                if child:IsA("Animation") then
-                    local track = humanoid:LoadAnimation(child)
-                    track:Play()
-                end
-            end
-        end
-    end)
-    
-    -- Method 7: ReplicatedStorage tool remotes
-    pcall(function()
-        local remoteNames = {"ToolActivated", "Swing", "Attack", "Use", "Mine", "Hit"}
-        for _, remoteName in pairs(remoteNames) do
-            local remote = ReplicatedStorage:FindFirstChild(remoteName, true)
-            if remote then
-                if remote:IsA("RemoteEvent") then
-                    remote:FireServer(tool)
-                elseif remote:IsA("RemoteFunction") then
-                    remote:InvokeServer(tool)
-                end
-            end
-        end
-    end)
-    
-    -- Method 8: Game-specific tool activation with params
-    pcall(function()
-        if Services.Tool.RF.ToolActivated then
-            Services.Tool.RF.ToolActivated:InvokeServer(tool, tool.Name)
-        end
-        if Services.Tool.RE and Services.Tool.RE.ToolActivated then
-            Services.Tool.RE.ToolActivated:FireServer(tool, tool.Name)
-        end
-    end)
-    
-    -- Method 9: Proximity-based activation for mining
-    pcall(function()
-        if autoMining then
-            local ore = findNearestOre()
-            if ore and ore.Parent then
-                Services.Proximity.RF.Forge:InvokeServer(ore.Parent, tool)
-            end
-        end
-    end)
-    
-    -- Method 4: Mobile touch simulation
-    mobileTouch()
-    
-    -- Method 5: Tool remote events (if exists)
-    pcall(function()
-        if tool:FindFirstChild("RemoteEvent") then
-            tool.RemoteEvent:FireServer()
-        end
-        if tool:FindFirstChild("RemoteFunction") then
-            tool.RemoteFunction:InvokeServer()
-        end
-    end)
-    
-    -- Method 6: Mouse1Click simulation
-    pcall(function()
-        mouse1click()
-    end)
 end
 
--- Auto Tap Functions with Improved Timing
-local lastTapTime = 0
-local tapDelay = 0.08 -- Optimal delay for both PC and mobile
+-- Auto tool loop connections
+local miningToolConnection = nil
+local killToolConnection = nil
 
-local function startMiningTap()
-    if miningTapConnection then
-        miningTapConnection:Disconnect()
-    end
+local function startMiningTool()
+    if miningToolConnection then miningToolConnection:Disconnect() end
     
-    lastTapTime = 0
-    
-    miningTapConnection = RunService.RenderStepped:Connect(function()
+    miningToolConnection = RunService.Heartbeat:Connect(function()
         if not autoMining then return end
-        if isUIVisible then return end -- Don't tap when UI is open
+        if isUIVisible then return end
         
-        local currentTime = tick()
-        if currentTime - lastTapTime >= tapDelay then
-            activateTool()
-            lastTapTime = currentTime
-        end
+        equipPickaxe()
+        activateTool()
+        task.wait(0.1)
     end)
 end
 
-local function stopMiningTap()
-    if miningTapConnection then
-        miningTapConnection:Disconnect()
-        miningTapConnection = nil
+local function stopMiningTool()
+    if miningToolConnection then
+        miningToolConnection:Disconnect()
+        miningToolConnection = nil
     end
 end
 
-local function startKillTap()
-    if killTapConnection then
-        killTapConnection:Disconnect()
-    end
+local function startKillTool()
+    if killToolConnection then killToolConnection:Disconnect() end
     
-    lastTapTime = 0
-    
-    killTapConnection = RunService.RenderStepped:Connect(function()
+    killToolConnection = RunService.Heartbeat:Connect(function()
         if not autoKillZombie then return end
-        if isUIVisible then return end -- Don't tap when UI is open
+        if isUIVisible then return end
         
-        local currentTime = tick()
-        if currentTime - lastTapTime >= tapDelay then
-            activateTool()
-            lastTapTime = currentTime
-        end
+        equipWeapon()
+        activateTool()
+        task.wait(0.1)
     end)
 end
 
-local function stopKillTap()
-    if killTapConnection then
-        killTapConnection:Disconnect()
-        killTapConnection = nil
+local function stopKillTool()
+    if killToolConnection then
+        killToolConnection:Disconnect()
+        killToolConnection = nil
     end
 end
 
@@ -412,6 +247,7 @@ local function equipPickaxe()
     local char = getCharacter()
     if not char then return false end
     
+    -- Check if already holding pickaxe
     local cur = char:FindFirstChildOfClass("Tool")
     if cur and (cur.Name:lower():find("pick") or cur.Name:lower():find("drill")) then
         return true
@@ -426,127 +262,70 @@ local function equipPickaxe()
                     local h = getHumanoid()
                     if h then
                         h:EquipTool(t)
-                        task.wait(0.1)
                         return true
                     end
                 end
             end
         end
-        
-        -- Fallback: specific pickaxe names
-        local pickaxeNames = {"Pickaxe", "Ember Pickaxe", "Titan Pick", "Crystal Carver", "Obsidian Drill", "Stone Pickaxe", "Iron Pickaxe", "Starter Pickaxe"}
-        for _, pickaxeName in pairs(pickaxeNames) do
-            local tool = backpack:FindFirstChild(pickaxeName)
-            if tool and tool:IsA("Tool") then
-                local humanoid = getHumanoid()
-                if humanoid then
-                    humanoid:EquipTool(tool)
-                    task.wait(0.1)
-                    return true
-                end
-            end
-        end
     end
-    
-    -- Try game-specific equip service
-    pcall(function()
-        for _, child in pairs(backpack:GetChildren()) do
-            if child:IsA("Tool") and (child.Name:lower():find("pick") or child.Name:lower():find("drill")) then
-                Services.Character.RF.EquipItem:InvokeServer(child.Name)
-                task.wait(0.1)
-            end
-        end
-    end)
-    
-    task.wait(0.2)
-    return char:FindFirstChildOfClass("Tool") ~= nil
+    return false
 end
 
 local function equipWeapon()
     local char = getCharacter()
     if not char then return false end
     
-    local currentTool = char:FindFirstChildOfClass("Tool")
-    if currentTool and (currentTool.Name:lower():find("sword") or currentTool.Name:lower():find("blade") or 
-                        currentTool.Name:lower():find("axe") or currentTool.Name:lower():find("hammer") or
-                        currentTool.Name:lower():find("weapon") or currentTool.Name:lower():find("dagger")) then
-        return true
+    -- Check if already holding weapon
+    local cur = char:FindFirstChildOfClass("Tool")
+    if cur then
+        local n = cur.Name:lower()
+        if n:find("sword") or n:find("blade") or n:find("axe") or n:find("hammer") or n:find("spear") or n:find("dagger") then
+            return true
+        end
     end
     
-    -- First, try to find any weapon in backpack
-    local backpack = LocalPlayer:FindFirstChild("Backpack")
-    if backpack then
-        -- Try to find any weapon tool
-        for _, tool in pairs(backpack:GetChildren()) do
-            if tool:IsA("Tool") then
-                local toolName = tool.Name:lower()
-                if toolName:find("sword") or toolName:find("blade") or toolName:find("axe") or 
-                   toolName:find("hammer") or toolName:find("weapon") or toolName:find("dagger") or
-                   toolName:find("katana") or toolName:find("scythe") then
-                    local humanoid = getHumanoid()
-                    if humanoid then
-                        humanoid:EquipTool(tool)
-                        task.wait(0.1)
+    local bp = LocalPlayer:FindFirstChild("Backpack")
+    if bp then
+        for _, t in pairs(bp:GetChildren()) do
+            if t:IsA("Tool") then
+                local n = t.Name:lower()
+                -- Weapon keywords, exclude pickaxe
+                if not n:find("pick") and (n:find("sword") or n:find("blade") or n:find("axe") or n:find("hammer") or n:find("spear") or n:find("dagger") or n:find("weapon")) then
+                    local h = getHumanoid()
+                    if h then
+                        h:EquipTool(t)
                         return true
                     end
                 end
             end
         end
     end
-    
-    local weps = {"Sword", "Frostbite Blade", "Shadow Cleaver", "Void Hammer", "Stormbreaker Axe", "Molten Warhammer", "Iron Sword", "Steel Blade", "Starter Sword"}
-    
-    local bp = LocalPlayer:FindFirstChild("Backpack")
-    if bp then
-        for _, w in pairs(weps) do
-            local t = bp:FindFirstChild(w)
-            if t and t:IsA("Tool") then
-                local h = getHumanoid()
-                if h then
-                    h:EquipTool(t)
-                    return true
-                end
-            end
-        end
-    end
-    
-    for _, name in pairs(weaponNames) do
-        pcall(function()
-            Services.Character.RF.EquipItem:InvokeServer(name)
-        end)
-    end
-    
-    task.wait(0.2)
-    return char:FindFirstChildOfClass("Tool") ~= nil
+    return false
 end
 
 local function findNearestOre()
     local hrp = getHumanoidRootPart()
     if not hrp then return nil end
     
-    local near = nil
-    local dist = math.huge
+    local nearestOre = nil
+    local nearestDistance = math.huge
     
     for _, obj in pairs(workspace:GetDescendants()) do
         if obj:IsA("Model") then
             local n = obj.Name:lower()
-            if n:find("pickaxe") or n:find("sword") or n:find("weapon") or n:find("tool") or n:find("axe") or n:find("stonewakes") then
+            -- Skip tools and equipment
+            if n:find("pickaxe") or n:find("sword") or n:find("weapon") or n:find("tool") or n:find("stonewakes") then
                 continue
             end
             
+            -- Skip player stuff
             local p = obj.Parent
-            if p and (p.Name == game.Players.LocalPlayer.Name or p:FindFirstChild("Humanoid")) then
+            if p and (p.Name == LocalPlayer.Name or p:FindFirstChild("Humanoid")) then
                 continue
             end
             
-            local ok = false
-            
-            -- match ore type
+            -- Match selected ore
             if obj.Name:find(selectedOre) then
-                isOre = true
-            end
-            
-            if isOre then
                 local orePart = obj:FindFirstChild("Part") or obj:FindFirstChildWhichIsA("BasePart")
                 if orePart then
                     local distance = (hrp.Position - orePart.Position).Magnitude
@@ -751,17 +530,17 @@ local function startAutoMining()
         farmConnection:Disconnect()
     end
     
-    startMiningTap()
-    task.wait(0.2)
+    startMiningTool()
     equipPickaxe()
     
     farmConnection = RunService.Heartbeat:Connect(function()
         if not autoMining then return end
         
         local t = tick()
-        if t - lastMine < cd then
-            return
-        end
+        if t - lastMine < cd then return end
+        
+        -- Keep pickaxe equipped
+        equipPickaxe()
         
         local ore = findNearestOre()
         if ore then
@@ -769,51 +548,30 @@ local function startAutoMining()
             if hrp then
                 local distance = (hrp.Position - ore.Position).Magnitude
                 
-                if distance > 300 then
-                    return
-                end
+                if distance > 300 then return end
                 
                 if distance > miningRange then
+                    -- Go below ore
                     local targetPos = ore.Position + Vector3.new(0, undergroundDistance, 0)
                     tweenTo(targetPos, flySpeed)
-                    
-                    if undergroundDistance < 0 then
-                        hrp.CFrame = CFrame.new(hrp.Position, ore.Position)
-                    end
-                else
-                    if undergroundDistance < 0 then
-                        hrp.CFrame = CFrame.new(hrp.Position, ore.Position)
-                    end
-                    
-                    local char = getCharacter()
-                    if char and not char:FindFirstChildOfClass("Tool") then
-                        equipPickaxe()
-                        wait(getRandomDelay(0.3, 0.5))
-                    end
-                    
-                    -- Add random delay before mining
-                    if useAntiCheat then
-                        wait(getRandomDelay(0.2, 0.4))
-                    end
-                    
-                    pcall(function()
-                        Services.Proximity.RF.Forge:InvokeServer(ore.Parent)
-                    end)
-                    
-                    if ore and ore.Parent then
-                        statsCollected = statsCollected + 1
-                        lastMineTime = currentTime
-                    end
-                    
-                    -- Add delay after mining
-                    if useAntiCheat then
-                        wait(getRandomDelay(0.3, 0.6))
-                    end
                 end
+                
+                -- Face upward toward ore
+                if undergroundDistance < 0 then
+                    local lookPos = ore.Position
+                    hrp.CFrame = CFrame.new(hrp.Position, Vector3.new(lookPos.X, hrp.Position.Y + 100, lookPos.Z))
+                end
+                
+                pcall(function()
+                    Services.Proximity.RF.Forge:InvokeServer(ore.Parent)
+                end)
+                
+                statsCollected = statsCollected + 1
+                lastMine = t
             end
         end
         
-        wait(useAntiCheat and getRandomDelay(0.5, 1.0) or 0.5)
+        task.wait(0.3)
     end)
 end
 
@@ -875,39 +633,32 @@ local function startAutoKill()
     end
     
     currentTarget = nil
-    startKillTap()
-    task.wait(0.2)
+    startKillTool()
     equipWeapon()
     
     killConnection = RunService.Heartbeat:Connect(function()
         if not autoKillZombie then return end
         
-        -- Anti-cheat: Rate limiting
-        local currentTime = tick()
-        if currentTime - lastAttackTime < attackCooldown then
-            return
-        end
+        local t = tick()
+        if t - lastAttackTime < attackCooldown then return end
         
+        -- Keep weapon equipped
+        equipWeapon()
+        
+        -- Check current target
         if currentTarget then
             local targetHumanoid = currentTarget:FindFirstChild("Humanoid")
             if not targetHumanoid or targetHumanoid.Health <= 0 or not currentTarget.Parent then
                 if targetHumanoid and targetHumanoid.Health <= 0 then
                     zombiesKilled = zombiesKilled + 1
-                    -- Add delay after kill
-                    if useAntiCheat then
-                        wait(getRandomDelay(0.5, 1.0))
-                    end
                 end
                 currentTarget = nil
             end
         end
         
+        -- Find new target
         if not currentTarget then
             currentTarget = findNearestZombie()
-            -- Add delay before attacking new target
-            if currentTarget and useAntiCheat then
-                wait(getRandomDelay(0.3, 0.5))
-            end
         end
         
         if currentTarget then
@@ -918,45 +669,30 @@ local function startAutoKill()
             if hrp and zombieHrp and zombieHumanoid and zombieHumanoid.Health > 0 then
                 local distance = (hrp.Position - zombieHrp.Position).Magnitude
                 
-                -- Anti-cheat: Don't attack if too far
                 if distance > 200 then
                     currentTarget = nil
                     return
                 end
                 
                 if distance > 8 then
-                    -- Position at underground distance below NPC
-                    tweenTo(zombieHrp.Position + Vector3.new(0, undergroundDistance, 0), flySpeed)
-                    
-                    -- Make character face upward to NPC when underground
-                    if undergroundDistance < 0 then
-                        hrp.CFrame = CFrame.new(hrp.Position, zombieHrp.Position)
-                    end
-                else
-                    -- Face upward to target when underground, otherwise natural facing
-                    if undergroundDistance < 0 then
-                        hrp.CFrame = CFrame.new(hrp.Position, zombieHrp.Position)
-                    elseif useAntiCheat then
-                        local lookAt = CFrame.new(hrp.Position, zombieHrp.Position)
-                        hrp.CFrame = hrp.CFrame:Lerp(lookAt, 0.5)
-                    else
-                        hrp.CFrame = CFrame.new(hrp.Position, zombieHrp.Position)
-                    end
-                    
-                    local char = getCharacter()
-                    if char and not char:FindFirstChildOfClass("Tool") then
-                        equipWeapon()
-                        wait(getRandomDelay(0.2, 0.4))
-                    end
-                    
-                    lastAttackTime = currentTime
+                    -- Go below NPC
+                    local targetPos = zombieHrp.Position + Vector3.new(0, undergroundDistance, 0)
+                    tweenTo(targetPos, flySpeed)
                 end
+                
+                -- Face upward toward target
+                if undergroundDistance < 0 then
+                    local lookPos = zombieHrp.Position
+                    hrp.CFrame = CFrame.new(hrp.Position, Vector3.new(lookPos.X, hrp.Position.Y + 100, lookPos.Z))
+                end
+                
+                lastAttackTime = t
             else
                 currentTarget = nil
             end
         end
         
-        wait(useAntiCheat and getRandomDelay(0.2, 0.4) or 0.2)
+        task.wait(0.2)
     end)
 end
 
@@ -996,7 +732,7 @@ Tabs.FarmTab:Toggle({
 				farmConnection = nil
 			end
 			disableNoclip()
-			stopMiningTap()
+			stopMiningTool()
 		end
 	end
 })
@@ -1110,7 +846,7 @@ Tabs.CombatTab:Toggle({
 				killConnection = nil
 			end
 			disableNoclip()
-			stopKillTap()
+			stopKillTool()
 			currentTarget = nil
 		end
 	end
@@ -1261,7 +997,7 @@ Tabs.InfoTab:Section({
 
 local statsLabel = Tabs.InfoTab:Paragraph{
 	Title = "Session Stats",
-	Desc = "AFK Actions: 0 | Ores: 0 | Kills: 0"
+	Desc = " Ores: 0 | Kills: 0"
 }
 
 spawn(function()
