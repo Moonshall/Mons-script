@@ -37,20 +37,23 @@ if not success or not NatHub then
 end
 
 local Window = NatHub:CreateWindow({
-	Title = "NatHub-Mons",
+	Title = "Nathub",
 	Icon = "rbxassetid://113216930555884",
-	Author = "Script Hub",
+	Author = "By Mons",
 	Folder = "TheForgeHub",
 	Size = UDim2.fromOffset(580, 460),
 	LiveSearchDropdown = true,
     AutoSave = true,
     FileSaveName = "TheForge_Config.json",
-    MinimizeKey = Enum.KeyCode.RightControl,
 })
 
--- Track UI visibility
-Window:OnMinimize(function(minimized)
-    isUIVisible = not minimized
+-- Track UI visibility with keybind
+local UIS = game:GetService("UserInputService")
+UIS.InputBegan:Connect(function(input, gpe)
+    if gpe then return end
+    if input.KeyCode == Enum.KeyCode.RightControl then
+        isUIVisible = not isUIVisible
+    end
 end)
 
 -- Create Tabs (NatHub format)
