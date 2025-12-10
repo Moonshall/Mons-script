@@ -21,9 +21,7 @@ local Services = {
 }
 
 -- Load NatUI Library
-local NatHub = loadstring(game:HttpGet("https://raw.githubusercontent.com/VEZ2/NAZAPI/main/api.lua"))()
-
-local Window = NatHub:CreateWindow({
+local Window = require(NatHub["3e"]):CreateWindow({
 	Title = "The Forge - Auto Farm",
 	Icon = "rbxassetid://113216930555884",
 	Author = "NatHub Script",
@@ -36,27 +34,14 @@ local Window = NatHub:CreateWindow({
 
 -- Create Tabs
 local Tabs = {
-    MainTab = Window:CreateTab({
-        Title = "Anti AFK",
-        Icon = "shield"
-    }),
-    FarmTab = Window:CreateTab({
-        Title = "Auto Farm",
-        Icon = "pickaxe"
-    }),
-    CombatTab = Window:CreateTab({
-        Title = "Combat",
-        Icon = "sword"
-    }),
-    MiscTab = Window:CreateTab({
-        Title = "Misc",
-        Icon = "settings"
-    }),
-    InfoTab = Window:CreateTab({
-        Title = "Info",
-        Icon = "info"
-    })
+    MainTab = Window:Tab({ Title = "Anti AFK", Icon = "shield", Desc = "Prevent AFK kick" }),
+    FarmTab = Window:Tab({ Title = "Auto Farm", Icon = "pickaxe", Desc = "Auto mining and forging" }),
+    CombatTab = Window:Tab({ Title = "Combat", Icon = "sword", Desc = "Auto kill enemies" }),
+    MiscTab = Window:Tab({ Title = "Misc", Icon = "settings", Desc = "Miscellaneous features" }),
+    InfoTab = Window:Tab({ Title = "Info", Icon = "info", Desc = "Script information" })
 }
+
+Window:SelectTab(1)
 
 -- Anti AFK Variables
 local antiAFKEnabled = false
