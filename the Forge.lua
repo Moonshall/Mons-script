@@ -24,9 +24,9 @@ local Services = {
 local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/dy1zn4t/bmF0dWk-/refs/heads/main/ui.lua"))()
 
 local Window = WindUI:CreateWindow({
-	Title = "The Forge - Auto Farm",
+	Title = "Nathub",
 	Icon = "rbxassetid://113216930555884",
-	Author = "NatHub Script",
+	Author = "By Mons",
 	Folder = "TheForgeConfig",
 	Size = UDim2.fromOffset(580, 460),
 	LiveSearchDropdown = true,
@@ -36,11 +36,10 @@ local Window = WindUI:CreateWindow({
 
 -- Create Tabs
 local Tabs = {
-    MainTab = Window:Tab({ Title = "Anti AFK", Icon = "shield", Desc = "Prevent AFK kick" }),
+    InfoTab = Window:Tab({ Title = "Info", Icon = "info", Desc = "Script information" }),
     FarmTab = Window:Tab({ Title = "Auto Farm", Icon = "pickaxe", Desc = "Auto mining and forging" }),
     CombatTab = Window:Tab({ Title = "Combat", Icon = "sword", Desc = "Auto kill enemies" }),
-    MiscTab = Window:Tab({ Title = "Misc", Icon = "settings", Desc = "Miscellaneous features" }),
-    InfoTab = Window:Tab({ Title = "Info", Icon = "info", Desc = "Script information" })
+    MiscTab = Window:Tab({ Title = "Misc", Icon = "settings", Desc = "Miscellaneous features" })
 }
 
 Window:SelectTab(1)
@@ -303,7 +302,7 @@ local function tweenTo(targetPos, speed)
     local distance = (hrp.Position - targetPos).Magnitude
     local duration = distance / speed
     
-    enableNoclip()
+    -- Removed noclip to fix flying issue
     
     local TweenService = game:GetService("TweenService")
     local tween = TweenService:Create(
@@ -313,9 +312,6 @@ local function tweenTo(targetPos, speed)
     )
     
     tween:Play()
-    tween.Completed:Connect(function()
-        disableNoclip()
-    end)
     
     return tween
 end
@@ -520,15 +516,6 @@ local function startAutoMining()
     -- Stop kill tapping first
     stopKillTap()
     
-    -- Equip pickaxe immediately
-    task.spawn(function()
-        task.wait(0.2)
-        equipPickaxe()
-    end)
-    
-    -- Start mining tap
-    startMiningTap()
-    
     farmConnection = RunService.Heartbeat:Connect(function()
         if not autoMining then return end
         
@@ -542,15 +529,19 @@ local function startAutoMining()
                     -- Fly to ore
                     tweenTo(ore.Position + Vector3.new(0, 3, 0), flySpeed)
                 else
-                    -- Stop at ore and ensure pickaxe equipped
+                    -- Ensure pickaxe equipped
                     local char = getCharacter()
                     if char then
                         local currentTool = char:FindFirstChildOfClass("Tool")
                         if not currentTool or not currentTool.Name:lower():find("pick") then
                             equipPickaxe()
-                            task.wait(0.2)
+                            task.wait(0.3)
                         end
                     end
+                    
+                    -- Activate tool for mining
+                    activateTool()
+                    task.wait(0.1)
                     
                     -- Mine the ore
                     forge(ore.Parent)
@@ -579,15 +570,6 @@ local function startAutoKill()
     
     -- Stop mining tapping first
     stopMiningTap()
-    
-    -- Equip weapon immediately
-    task.spawn(function()
-        task.wait(0.2)
-        equipWeapon()
-    end)
-    
-    -- Start kill tap
-    startKillTap()
     
     killConnection = RunService.Heartbeat:Connect(function()
         if not autoKillZombie then return end
@@ -622,7 +604,7 @@ local function startAutoKill()
                     -- Fly to zombie
                     tweenTo(zombieHrp.Position + Vector3.new(0, 2, 0), flySpeed)
                 else
-                    -- Face and attack
+                    -- Face target
                     hrp.CFrame = CFrame.new(hrp.Position, zombieHrp.Position)
                     
                     -- Ensure weapon equipped
@@ -634,9 +616,13 @@ local function startAutoKill()
                                                     currentTool.Name:lower():find("axe") or 
                                                     currentTool.Name:lower():find("hammer")) then
                             equipWeapon()
-                            task.wait(0.2)
+                            task.wait(0.3)
                         end
                     end
+                    
+                    -- Activate weapon for attacking
+                    activateTool()
+                    task.wait(0.1)
                 end
             else
                 currentTarget = nil
@@ -819,83 +805,40 @@ local function startAutoForge()
     end)
 end
 
--- Main Tab Content
-Tabs.MainTab:Section({
-	Title = "Anti AFK Status"
+-- Info Tab
+Tabs.InfoTab:Section({
+	Title = "Script Information",
 })
 
-Tabs.MainTab:Paragraph{
-	Title = "About Anti AFK",
-	Desc = "This feature prevents Roblox from kicking you after 20 minutes of inactivity."
+Tabs.InfoTab:Paragraph{
+	Title = "NatHub Script",
+	Desc = "Version: 2.0\nGame: The Forge\nGame ID: 76558904092080\n\nAll-in-one script with Anti AFK, Auto Mining, Auto Kill, and Auto Forge features."
 }
 
--- Anti AFK Toggle
-Tabs.MainTab:Toggle({
-	Title = "Enable Anti AFK",
-	Icon = "shield",
-	Default = false,
-	Callback = function(state) 
-		antiAFKEnabled = state
-		
-		if state then
-			-- Start Anti AFK loop
-			if afkConnection then
-				afkConnection:Disconnect()
-			end
-			
-			-- Perform anti AFK action every 60 seconds
-			afkConnection = game:GetService("RunService").Heartbeat:Connect(function()
-				if tick() - lastAction >= 60 then
-					performAntiAFK()
-				end
-			end)
-			
-			-- Also hook into Idled event
-			LocalPlayer.Idled:connect(function()
-				if antiAFKEnabled then
-					VirtualUser:CaptureController()
-					VirtualUser:ClickButton2(Vector2.new())
-				end
-			end)
-		else
-			if afkConnection then
-				afkConnection:Disconnect()
-				afkConnection = nil
-			end
-		end
-	end
-})
-
-Tabs.MainTab:Section({
-	Title = "Statistics",
-})
-
--- Statistics Display
-local statsText = Tabs.MainTab:Paragraph{
+Tabs.InfoTab:Section({
 	Title = "Session Statistics",
-	Desc = "Actions performed: 0\nLast action: Never"
+})
+
+local allStatsText = Tabs.InfoTab:Paragraph{
+	Title = "Live Statistics",
+	Desc = "Anti AFK Actions: 0\nOres Collected: 0\nZombies Killed: 0\nItems Sold: 0\nItems Forged: 0"
 }
 
--- Update stats every 5 seconds
+-- Update all stats
 spawn(function()
-	while wait(5) do
-		if antiAFKEnabled then
-			local timeSince = math.floor(tick() - lastAction)
-			statsText:SetDesc(string.format("Actions performed: %d\nLast action: %d seconds ago", actionCount, timeSince))
-		end
+	while wait(2) do
+		allStatsText:SetDesc(string.format("Anti AFK Actions: %d\nOres Collected: %d\nZombies Killed: %d\nItems Sold: %d\nItems Forged: %d", actionCount, statsCollected, zombiesKilled, itemsSold, itemsForged))
 	end
 end)
 
--- Manual Action Button
-Tabs.MainTab:Button({
-	Title = "Perform Manual Action",
-	Desc = "Manually trigger anti AFK action",
-	Callback = function() 
-		if antiAFKEnabled then
-			performAntiAFK()
-		end
-	end
+Tabs.InfoTab:Section({
+	Title = "Features",
 })
+
+Tabs.InfoTab:Paragraph{
+	Title = "Complete Feature List",
+	Desc = "• Anti AFK with auto input simulation\n• Auto Mining with tool activation\n• Auto Kill NPC with weapon\n• Auto Sell to Merchant/Shop\n• Auto Forge with instant melt/pour\n• Perfect Hammer (100%)\n• Fly to targets\n• Session statistics"
+}
 
 -- Farm Tab
 Tabs.FarmTab:Section({
@@ -1150,6 +1093,51 @@ Tabs.CombatTab:Button({
 
 -- Misc Tab
 Tabs.MiscTab:Section({
+    Title = "Anti AFK",
+})
+
+Tabs.MiscTab:Paragraph{
+	Title = "About Anti AFK",
+	Desc = "Prevents Roblox from kicking you after 20 minutes of inactivity."
+}
+
+Tabs.MiscTab:Toggle({
+	Title = "Enable Anti AFK",
+	Icon = "shield",
+	Default = false,
+	Callback = function(state) 
+		antiAFKEnabled = state
+		
+		if state then
+			-- Start Anti AFK loop
+			if afkConnection then
+				afkConnection:Disconnect()
+			end
+			
+			-- Perform anti AFK action every 60 seconds
+			afkConnection = game:GetService("RunService").Heartbeat:Connect(function()
+				if tick() - lastAction >= 60 then
+					performAntiAFK()
+				end
+			end)
+			
+			-- Also hook into Idled event
+			LocalPlayer.Idled:connect(function()
+				if antiAFKEnabled then
+					VirtualUser:CaptureController()
+					VirtualUser:ClickButton2(Vector2.new())
+				end
+			end)
+		else
+			if afkConnection then
+				afkConnection:Disconnect()
+				afkConnection = nil
+			end
+		end
+	end
+})
+
+Tabs.MiscTab:Section({
     Title = "Player Settings",
 })
 
@@ -1187,48 +1175,8 @@ Tabs.MiscTab:Button({
     end
 })
 
--- Info Tab
-Tabs.InfoTab:Section({
-	Title = "Script Information",
-})
-
-Tabs.InfoTab:Paragraph{
-	Title = "Hi",
-	Desc = "Version: 2.0\nGame ID: 76558904092080\n\nAll-in-one script with Anti AFK, Auto Mining, and Auto Kill features."
-}
-
-Tabs.InfoTab:Section({
-	Title = "Statistics",
-})
-
-local allStatsText = Tabs.InfoTab:Paragraph{
-	Title = "Session Statistics",
-	Desc = "Anti AFK Actions: 0\nOres Collected: 0\nZombies Killed: 0\nItems Sold: 0\nItems Forged: 0"
-}
-
--- Update all stats
-spawn(function()
-	while wait(2) do
-		allStatsText:SetDesc(string.format("Anti AFK Actions: %d\nOres Collected: %d\nZombies Killed: %d\nItems Sold: %d\nItems Forged: %d", actionCount, statsCollected, zombiesKilled, itemsSold, itemsForged))
-	end
-end)
-
-Tabs.InfoTab:Section({
-	Title = "Features",
-})
-
-Tabs.InfoTab:Paragraph{
-	Title = "Complete Feature List",
-	Desc = "• Anti AFK with auto input simulation\n• Auto Mining with noclip & auto-tap\n• Auto Kill NPC with weapon & auto-tap\n• Auto Sell to Merchant/Shop\n• Auto Forge crafting\n• Fixed fly speed (50)\n• Noclip enabled during farming\n• Session statistics\n• Remote service integration"
-}
-
-Tabs.InfoTab:Paragraph{
-	Title = "Remote Services Used",
-	Desc = "• ToolService (Tool activation)\n• CharacterService (Equip items)\n• ProximityService (Dialogue, Forge)\n• DialogueService (Run commands)\n• StatusService (Equipment info)\n• All official game services"
-}
-
 -- Load notification
-NatHub:Notify({
+WindUI:Notify({
 	Title = "NatHub",
 	Content = "Script loaded successfully!",
 	Icon = "check-circle",
