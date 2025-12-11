@@ -302,7 +302,8 @@ local function tweenTo(targetPos, speed)
     local distance = (hrp.Position - targetPos).Magnitude
     local duration = distance / speed
     
-    -- Removed noclip to fix flying issue
+    -- Enable noclip for smooth flying
+    enableNoclip()
     
     local TweenService = game:GetService("TweenService")
     local tween = TweenService:Create(
@@ -312,6 +313,10 @@ local function tweenTo(targetPos, speed)
     )
     
     tween:Play()
+    
+    tween.Completed:Connect(function()
+        disableNoclip()
+    end)
     
     return tween
 end
@@ -352,19 +357,36 @@ local function equipPickaxe()
                 local humanoid = getHumanoid()
                 if humanoid then
                     humanoid:EquipTool(tool)
-                    task.wait(0.3)
-                    return true
+                    task.wait(0.2)
+                    -- Verify equipped
+                    if char:FindFirstChildOfClass("Tool") then
+                        return true
+                    end
                 end
             end
         end
     end
     
     -- Method 2: Use ToolService remote with 'Pickaxe' parameter
-    pcall(function()
+    local success = pcall(function()
         Services.Tool.RF.ToolActivated:InvokeServer("Pickaxe")
     end)
     
-    task.wait(0.5)
+    if success then
+        task.wait(0.3)
+        -- Verify equipped after remote call
+        currentTool = char:FindFirstChildOfClass("Tool")
+        if currentTool and currentTool.Name:lower():find("pick") then
+            return true
+        end
+    end
+    
+    -- Method 3: Try Character service equip
+    pcall(function()
+        Services.Character.RF.EquipItem:InvokeServer("Pickaxe")
+    end)
+    
+    task.wait(0.3)
     return char:FindFirstChildOfClass("Tool") ~= nil
 end
 
@@ -377,7 +399,8 @@ local function equipWeapon()
     if currentTool and (currentTool.Name:lower():find("sword") or 
                         currentTool.Name:lower():find("blade") or 
                         currentTool.Name:lower():find("axe") or 
-                        currentTool.Name:lower():find("hammer")) then
+                        currentTool.Name:lower():find("hammer") or
+                        currentTool.Name:lower():find("weapon")) then
         return true
     end
     
@@ -388,23 +411,41 @@ local function equipWeapon()
             if tool:IsA("Tool") and (tool.Name:lower():find("sword") or 
                                      tool.Name:lower():find("blade") or 
                                      tool.Name:lower():find("axe") or 
-                                     tool.Name:lower():find("hammer")) then
+                                     tool.Name:lower():find("hammer") or
+                                     tool.Name:lower():find("weapon")) then
                 local humanoid = getHumanoid()
                 if humanoid then
                     humanoid:EquipTool(tool)
-                    task.wait(0.3)
-                    return true
+                    task.wait(0.2)
+                    -- Verify equipped
+                    if char:FindFirstChildOfClass("Tool") then
+                        return true
+                    end
                 end
             end
         end
     end
     
     -- Method 2: Use ToolService remote with 'Weapon' parameter
-    pcall(function()
+    local success = pcall(function()
         Services.Tool.RF.ToolActivated:InvokeServer("Weapon")
     end)
     
-    task.wait(0.5)
+    if success then
+        task.wait(0.3)
+        -- Verify equipped after remote call
+        currentTool = char:FindFirstChildOfClass("Tool")
+        if currentTool then
+            return true
+        end
+    end
+    
+    -- Method 3: Try Character service equip
+    pcall(function()
+        Services.Character.RF.EquipItem:InvokeServer("Weapon")
+    end)
+    
+    task.wait(0.3)
     return char:FindFirstChildOfClass("Tool") ~= nil
 end
 
