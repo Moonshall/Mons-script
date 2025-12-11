@@ -146,6 +146,13 @@ local function enableNoclip()
                         part.CanCollide = false
                     end
                 end
+                -- Extra ensure for main body parts
+                local hrp = char:FindFirstChild("HumanoidRootPart")
+                local head = char:FindFirstChild("Head")
+                local torso = char:FindFirstChild("Torso") or char:FindFirstChild("UpperTorso")
+                if hrp then hrp.CanCollide = false end
+                if head then head.CanCollide = false end
+                if torso then torso.CanCollide = false end
             end
         end
     end)
@@ -218,18 +225,10 @@ local function findNearestOre()
         if obj:IsA("Model") then
             local isOre = false
             
-            -- Check if matches selected ore (when not "All")
-            if selectedOre ~= "All" and selectedOre ~= "None" then
+            -- Only match selected ore type (no "All" option)
+            if selectedOre and selectedOre ~= "None" then
                 if obj.Name:find(selectedOre) then
                     isOre = true
-                end
-            else
-                -- Check against ore names list for "All"
-                for _, oreName in pairs(oreNames) do
-                    if obj.Name:find(oreName) then
-                        isOre = true
-                        break
-                    end
                 end
             end
             
@@ -262,17 +261,8 @@ local function findNearestZombie()
             if npcHumanoid and npcHumanoid.Health > 0 then
                 local isEnemy = false
                 
-                -- Check if it's an enemy NPC
-                if selectedNPC == "All" then
-                    -- Check against common enemy names
-                    for _, enemyName in pairs(npcNames) do
-                        if npc.Name:lower():find(enemyName:lower()) then
-                            isEnemy = true
-                            break
-                        end
-                    end
-                else
-                    -- Check for specific NPC
+                -- Only match selected NPC type (no "All" option)
+                if selectedNPC and selectedNPC ~= "None" then
                     if npc.Name:lower():find(selectedNPC:lower()) then
                         isEnemy = true
                     end
@@ -343,13 +333,23 @@ local function equipPickaxe()
     local char = getCharacter()
     if not char then return false end
     
-    -- Check if already equipped
+    -- Unequip current tool first if it's not a pickaxe
     local currentTool = char:FindFirstChildOfClass("Tool")
+    if currentTool and not currentTool.Name:lower():find("pick") then
+        local humanoid = getHumanoid()
+        if humanoid then
+            humanoid:UnequipTools()
+            task.wait(0.1)
+        end
+    end
+    
+    -- Check if pickaxe is now equipped
+    currentTool = char:FindFirstChildOfClass("Tool")
     if currentTool and currentTool.Name:lower():find("pick") then
         return true
     end
     
-    -- Method 1: Try backpack first for faster equipping
+    -- Try to equip from backpack
     local backpack = LocalPlayer:FindFirstChild("Backpack")
     if backpack then
         for _, tool in pairs(backpack:GetChildren()) do
@@ -358,35 +358,18 @@ local function equipPickaxe()
                 if humanoid then
                     humanoid:EquipTool(tool)
                     task.wait(0.2)
-                    -- Verify equipped
-                    if char:FindFirstChildOfClass("Tool") then
-                        return true
-                    end
+                    return true
                 end
             end
         end
     end
     
-    -- Method 2: Use ToolService remote with 'Pickaxe' parameter
-    local success = pcall(function()
+    -- Use remote to activate pickaxe
+    pcall(function()
         Services.Tool.RF.ToolActivated:InvokeServer("Pickaxe")
     end)
-    
-    if success then
-        task.wait(0.3)
-        -- Verify equipped after remote call
-        currentTool = char:FindFirstChildOfClass("Tool")
-        if currentTool and currentTool.Name:lower():find("pick") then
-            return true
-        end
-    end
-    
-    -- Method 3: Try Character service equip
-    pcall(function()
-        Services.Character.RF.EquipItem:InvokeServer("Pickaxe")
-    end)
-    
     task.wait(0.3)
+    
     return char:FindFirstChildOfClass("Tool") ~= nil
 end
 
@@ -394,8 +377,22 @@ local function equipWeapon()
     local char = getCharacter()
     if not char then return false end
     
-    -- Check if already equipped
+    -- Unequip current tool first if it's not a weapon
     local currentTool = char:FindFirstChildOfClass("Tool")
+    if currentTool and not (currentTool.Name:lower():find("sword") or 
+                           currentTool.Name:lower():find("blade") or 
+                           currentTool.Name:lower():find("axe") or 
+                           currentTool.Name:lower():find("hammer") or
+                           currentTool.Name:lower():find("weapon")) then
+        local humanoid = getHumanoid()
+        if humanoid then
+            humanoid:UnequipTools()
+            task.wait(0.1)
+        end
+    end
+    
+    -- Check if weapon is now equipped
+    currentTool = char:FindFirstChildOfClass("Tool")
     if currentTool and (currentTool.Name:lower():find("sword") or 
                         currentTool.Name:lower():find("blade") or 
                         currentTool.Name:lower():find("axe") or 
@@ -404,7 +401,7 @@ local function equipWeapon()
         return true
     end
     
-    -- Method 1: Try backpack first for faster equipping
+    -- Try to equip from backpack
     local backpack = LocalPlayer:FindFirstChild("Backpack")
     if backpack then
         for _, tool in pairs(backpack:GetChildren()) do
@@ -417,35 +414,18 @@ local function equipWeapon()
                 if humanoid then
                     humanoid:EquipTool(tool)
                     task.wait(0.2)
-                    -- Verify equipped
-                    if char:FindFirstChildOfClass("Tool") then
-                        return true
-                    end
+                    return true
                 end
             end
         end
     end
     
-    -- Method 2: Use ToolService remote with 'Weapon' parameter
-    local success = pcall(function()
+    -- Use remote to activate weapon
+    pcall(function()
         Services.Tool.RF.ToolActivated:InvokeServer("Weapon")
     end)
-    
-    if success then
-        task.wait(0.3)
-        -- Verify equipped after remote call
-        currentTool = char:FindFirstChildOfClass("Tool")
-        if currentTool then
-            return true
-        end
-    end
-    
-    -- Method 3: Try Character service equip
-    pcall(function()
-        Services.Character.RF.EquipItem:InvokeServer("Weapon")
-    end)
-    
     task.wait(0.3)
+    
     return char:FindFirstChildOfClass("Tool") ~= nil
 end
 
@@ -744,44 +724,50 @@ local function performCompleteForge()
     task.wait(0.5)
     
     -- Step 3: Melt (Instant if enabled)
+    local meltParams = {
+        ItemType = forgeItemType,
+        Ores = forgeOres
+    }
+    if autoInstantMelt then
+        meltParams.FastForge = true
+        meltParams.Instant = true
+    end
+    
     pcall(function()
-        Services.Forge.RF.ChangeSequence:InvokeServer("Melt", {
-            FastForge = autoInstantMelt,
-            ItemType = forgeItemType,
-            Ores = forgeOres
-        })
+        Services.Forge.RF.ChangeSequence:InvokeServer("Melt", meltParams)
     end)
     print("[Auto Forge] Melt stage" .. (autoInstantMelt and " (Instant)" or ""))
-    task.wait(autoInstantMelt and 0.5 or 3)
+    task.wait(autoInstantMelt and 0.3 or 3)
     
     -- Step 4: Pour (Instant if enabled)
+    local pourParams = {
+        ClientTime = tick()
+    }
+    if autoInstantPour then
+        pourParams.Instant = true
+        pourParams.FastPour = true
+    end
+    
     pcall(function()
-        Services.Forge.RF.ChangeSequence:InvokeServer("Pour", {
-            ClientTime = tick()
-        })
+        Services.Forge.RF.ChangeSequence:InvokeServer("Pour", pourParams)
     end)
     print("[Auto Forge] Pour stage" .. (autoInstantPour and " (Instant)" or ""))
-    task.wait(autoInstantPour and 0.5 or 3)
+    task.wait(autoInstantPour and 0.3 or 3)
     
     -- Step 5: Hammer (Perfect if enabled)
+    local hammerParams = {
+        ClientTime = tick()
+    }
     if autoPerfectHammer then
-        -- Perfect hammer - wait for perfect timing
-        task.wait(0.1)
-        pcall(function()
-            Services.Forge.RF.ChangeSequence:InvokeServer("Hammer", {
-                ClientTime = tick(),
-                Perfect = true
-            })
-        end)
-        print("[Auto Forge] Hammer stage (Perfect)")
-    else
-        pcall(function()
-            Services.Forge.RF.ChangeSequence:InvokeServer("Hammer", {
-                ClientTime = tick()
-            })
-        end)
-        print("[Auto Forge] Hammer stage")
+        hammerParams.Perfect = true
+        hammerParams.Quality = 100
+        hammerParams.Accuracy = 1
     end
+    
+    pcall(function()
+        Services.Forge.RF.ChangeSequence:InvokeServer("Hammer", hammerParams)
+    end)
+    print("[Auto Forge] Hammer stage" .. (autoPerfectHammer and " (Perfect 100%)" or ""))
     task.wait(2)
     
     -- Step 6: Water
@@ -893,14 +879,8 @@ Tabs.FarmTab:Paragraph{
 
 Tabs.FarmTab:Dropdown({
     Title = "Select Ore Type",
-    Values = (function()
-        local values = {"All"}
-        for _, ore in pairs(oreNames) do
-            table.insert(values, ore)
-        end
-        return values
-    end)(),
-    Value = "All",
+    Values = oreNames,
+    Value = oreNames[1],
     Callback = function(value)
         selectedOre = value
     end
@@ -1081,14 +1061,8 @@ Tabs.CombatTab:Paragraph{
 
 Tabs.CombatTab:Dropdown({
     Title = "Select NPC Type",
-    Values = (function()
-        local values = {"All"}
-        for _, npc in pairs(npcNames) do
-            table.insert(values, npc)
-        end
-        return values
-    end)(),
-    Value = "All",
+    Values = npcNames,
+    Value = npcNames[1],
     Callback = function(value)
         selectedNPC = value
     end
