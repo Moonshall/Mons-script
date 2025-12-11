@@ -133,26 +133,32 @@ end
 
 -- Noclip Function (only active during flying)
 local isFlying = false
+local originalCollisionGroup = {}
 
 local function enableNoclip()
     if noclipConnection then return end
     isFlying = true
+    
+    local char = getCharacter()
+    if char then
+        -- Store original CanCollide states and disable them
+        for _, part in pairs(char:GetDescendants()) do
+            if part:IsA("BasePart") then
+                originalCollisionGroup[part] = part.CanCollide
+                part.CanCollide = false
+            end
+        end
+    end
+    
     noclipConnection = RunService.Stepped:Connect(function()
         if isFlying then
-            local char = getCharacter()
-            if char then
-                for _, part in pairs(char:GetDescendants()) do
+            local character = getCharacter()
+            if character then
+                for _, part in pairs(character:GetDescendants()) do
                     if part:IsA("BasePart") then
                         part.CanCollide = false
                     end
                 end
-                -- Extra ensure for main body parts
-                local hrp = char:FindFirstChild("HumanoidRootPart")
-                local head = char:FindFirstChild("Head")
-                local torso = char:FindFirstChild("Torso") or char:FindFirstChild("UpperTorso")
-                if hrp then hrp.CanCollide = false end
-                if head then head.CanCollide = false end
-                if torso then torso.CanCollide = false end
             end
         end
     end)
@@ -164,14 +170,21 @@ local function disableNoclip()
         noclipConnection:Disconnect()
         noclipConnection = nil
     end
+    
     local char = getCharacter()
     if char then
+        -- Restore original CanCollide states
         for _, part in pairs(char:GetDescendants()) do
             if part:IsA("BasePart") then
-                part.CanCollide = true
+                if originalCollisionGroup[part] ~= nil then
+                    part.CanCollide = originalCollisionGroup[part]
+                else
+                    part.CanCollide = true
+                end
             end
         end
     end
+    originalCollisionGroup = {}
 end
 
 -- Auto Tap Functions for Mining
@@ -547,9 +560,15 @@ local function startAutoMining()
                 local distance = (hrp.Position - ore.Position).Magnitude
                 
                 if distance > miningRange then
-                    -- Fly to ore
-                    tweenTo(ore.Position + Vector3.new(0, 3, 0), flySpeed)
+                    -- Fly to position in front of ore
+                    local targetPosition = ore.Position + Vector3.new(0, 2, 0)
+                    tweenTo(targetPosition, flySpeed)
                 else
+                    -- Position character directly in front of ore and face it
+                    local orePosition = ore.Position
+                    local offsetPosition = orePosition + (hrp.Position - orePosition).Unit * 5
+                    hrp.CFrame = CFrame.new(offsetPosition, orePosition)
+                    
                     -- Ensure pickaxe equipped
                     local char = getCharacter()
                     if char then
